@@ -17,6 +17,7 @@ Coletor para a [Consulta Completa de Jurisprudência do Segundo Grau do TJSP](ht
 - busca híbrida combinando SQLite FTS5/BM25 e similaridade vetorial Chroma;
 - pacote RAG rastreável, pronto para conectar a um provedor de IA;
 - auditoria SQLite de respostas, fontes, tokens, latência e erros;
+- API FastAPI local para busca, resposta Maritaca e consulta de auditorias;
 - avaliação reproduzível de recuperação, citações e respostas jurídicas;
 - saída JSONL ou CSV;
 - intervalo entre requisições, retentativas com backoff e limite explícito de páginas.
@@ -156,6 +157,61 @@ Cada uso de `--responder` cria uma auditoria antes da chamada e a conclui com re
 tjsp-auditoria --limite 20
 tjsp-auditoria 1 --json
 ```
+
+## API local
+
+Inicie o serviço somente na máquina local:
+
+```powershell
+tjsp-api
+```
+
+A documentação interativa fica em `http://127.0.0.1:8000/docs`. O endereço padrão não expõe o serviço para a rede.
+
+Busca híbrida sem chamada de IA:
+
+```powershell
+$corpo = @{
+  pergunta = "Quando o TJSP reconhece dano moral?"
+  limite = 5
+  filtros = @{ assunto = "Dano Moral" }
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/buscar `
+  -ContentType "application/json" `
+  -Body $corpo
+```
+
+Resposta Maritaca com fontes e auditoria:
+
+```powershell
+$corpo = @{
+  pergunta = "Quando o TJSP reconhece dano moral?"
+  limite_fontes = 6
+  max_output_tokens = 800
+  max_custo_brl = 0.10
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/perguntar `
+  -ContentType "application/json" `
+  -Body $corpo
+```
+
+Endpoints disponíveis:
+
+- `GET /saude`: configuração pública e estado do serviço;
+- `POST /buscar`: recuperação híbrida local, sem cobrança;
+- `POST /perguntar`: RAG com Maritaca, fontes, tokens e custo estimado;
+- `GET /auditorias`: últimas chamadas registradas;
+- `GET /auditorias/{id}`: detalhes, fontes e resultado de uma chamada.
+
+O servidor limita cada requisição a `TJSP_API_MAX_CUSTO_BRL=0.10` e `TJSP_API_MAX_OUTPUT_TOKENS=2000`. O cliente pode pedir limites menores, nunca maiores. A estimativa conservadora é calculada antes da chamada; ausência de fontes, chave Maritaca ou orçamento suficiente impede a chamada paga. Caminhos podem ser alterados por `TJSP_SQLITE_PATH` e `TJSP_CHROMA_PATH` no `.env`.
+
+O serviço não possui autenticação de usuário. Mantenha o `host` padrão `127.0.0.1`; não use `--host 0.0.0.0` em ambiente acessível por terceiros sem adicionar autenticação e proteção de tráfego.
 
 ## Avaliação jurídica
 
