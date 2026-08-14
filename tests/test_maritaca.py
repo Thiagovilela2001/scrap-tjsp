@@ -12,7 +12,16 @@ class RespostasFalsas:
 
     def create(self, **kwargs):
         self.parametros = kwargs
-        return SimpleNamespace(output_text="Resposta jurídica com [Fonte 1].")
+        return SimpleNamespace(
+            output_text="Resposta jurídica com [Fonte 1].",
+            id="resp-123",
+            model="sabia-4",
+            usage=SimpleNamespace(
+                input_tokens=100,
+                output_tokens=20,
+                total_tokens=120,
+            ),
+        )
 
 
 class ClienteFalso:
@@ -40,7 +49,10 @@ def test_envia_pacote_rag_para_responses_api():
 
     resposta = provedor.responder(_pacote())
 
-    assert resposta == "Resposta jurídica com [Fonte 1]."
+    assert resposta.texto == "Resposta jurídica com [Fonte 1]."
+    assert resposta.resposta_id == "resp-123"
+    assert resposta.tokens_total == 120
+    assert resposta.duracao_ms is not None
     assert cliente.responses.parametros == {
         "model": "sabia-4",
         "instructions": "Use somente as fontes.",

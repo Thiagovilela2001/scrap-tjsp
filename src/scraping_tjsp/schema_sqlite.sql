@@ -122,9 +122,61 @@ WHERE NOT EXISTS (
 
 INSERT OR IGNORE INTO migracoes_schema (id) VALUES ('001_chunks_fts');
 
+CREATE TABLE IF NOT EXISTS execucoes_ia (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pergunta TEXT NOT NULL,
+    provedor TEXT NOT NULL,
+    modelo TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('processando', 'concluida', 'erro')),
+    configuracao TEXT NOT NULL CHECK (json_valid(configuracao)),
+    instrucoes_sistema TEXT NOT NULL,
+    mensagem_usuario TEXT NOT NULL,
+    resposta TEXT,
+    resposta_externa_id TEXT,
+    tokens_entrada INTEGER CHECK (tokens_entrada IS NULL OR tokens_entrada >= 0),
+    tokens_saida INTEGER CHECK (tokens_saida IS NULL OR tokens_saida >= 0),
+    tokens_total INTEGER CHECK (tokens_total IS NULL OR tokens_total >= 0),
+    duracao_ms INTEGER CHECK (duracao_ms IS NULL OR duracao_ms >= 0),
+    erro TEXT,
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    concluido_em TEXT
+);
+
+CREATE TABLE IF NOT EXISTS fontes_execucao_ia (
+    execucao_id INTEGER NOT NULL REFERENCES execucoes_ia(id) ON DELETE CASCADE,
+    posicao INTEGER NOT NULL CHECK (posicao > 0),
+    chunk_id TEXT NOT NULL,
+    citacao TEXT NOT NULL,
+    url TEXT NOT NULL DEFAULT '',
+    texto TEXT NOT NULL,
+    score_hibrido REAL NOT NULL,
+    PRIMARY KEY (execucao_id, posicao)
+);
+
+CREATE TABLE IF NOT EXISTS execucoes_avaliacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dataset TEXT NOT NULL,
+    configuracao TEXT NOT NULL CHECK (json_valid(configuracao)),
+    resumo TEXT NOT NULL CHECK (json_valid(resumo)),
+    aprovado INTEGER NOT NULL CHECK (aprovado IN (0, 1)),
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS casos_avaliacao (
+    avaliacao_id INTEGER NOT NULL REFERENCES execucoes_avaliacao(id) ON DELETE CASCADE,
+    caso_id TEXT NOT NULL,
+    pergunta TEXT NOT NULL,
+    resultado TEXT NOT NULL CHECK (json_valid(resultado)),
+    aprovado INTEGER NOT NULL CHECK (aprovado IN (0, 1)),
+    PRIMARY KEY (avaliacao_id, caso_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_decisoes_processo ON decisoes (processo);
 CREATE INDEX IF NOT EXISTS idx_decisoes_data_julgamento ON decisoes (data_julgamento);
 CREATE INDEX IF NOT EXISTS idx_decisoes_orgao_julgador ON decisoes (orgao_julgador);
 CREATE INDEX IF NOT EXISTS idx_documentos_status ON documentos (status);
 CREATE INDEX IF NOT EXISTS idx_processamentos_status ON processamentos_documento (status);
 CREATE INDEX IF NOT EXISTS idx_chunks_pagina ON chunks_documento (processamento_id, pagina);
+CREATE INDEX IF NOT EXISTS idx_execucoes_ia_status ON execucoes_ia (status);
+CREATE INDEX IF NOT EXISTS idx_execucoes_ia_criado_em ON execucoes_ia (criado_em);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_criado_em ON execucoes_avaliacao (criado_em);

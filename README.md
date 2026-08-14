@@ -16,6 +16,8 @@ Coletor para a [Consulta Completa de Jurisprudência do Segundo Grau do TJSP](ht
 - chunks com IDs estáveis e citação por processo, acórdão e página;
 - busca híbrida combinando SQLite FTS5/BM25 e similaridade vetorial Chroma;
 - pacote RAG rastreável, pronto para conectar a um provedor de IA;
+- auditoria SQLite de respostas, fontes, tokens, latência e erros;
+- avaliação reproduzível de recuperação, citações e respostas jurídicas;
 - saída JSONL ou CSV;
 - intervalo entre requisições, retentativas com backoff e limite explícito de páginas.
 
@@ -76,6 +78,8 @@ Na primeira execução, o coletor cria automaticamente estas tabelas SQLite:
 - `processamentos_documento`: estado, tentativas e métricas da extração;
 - `paginas_documento`: texto, método nativo/OCR e erro por página;
 - `chunks_documento`: trechos usados pelo índice vetorial.
+- `execucoes_ia` e `fontes_execucao_ia`: trilha completa de cada chamada;
+- `execucoes_avaliacao` e `casos_avaliacao`: histórico dos relatórios de qualidade.
 
 Ementas são gravadas na coleção Chroma `ementas_tjsp`, usando `cd_acordao` como identificador estável. Modelo padrão local: `all-MiniLM-L6-v2`; arquivos do modelo podem ser baixados automaticamente na primeira indexação. Ele serve ao MVP sem configuração, mas deverá ser comparado com BGE-M3 antes da avaliação jurídica de relevância.
 
@@ -145,6 +149,39 @@ $env:MARITACA_API_KEY = "sua-chave"
 ```
 
 `.env` está ignorado pelo Git. `--responder` faz chamada externa potencialmente tarifada; `--contexto-ia` apenas prepara o pacote local, sem chamar o modelo.
+
+Cada uso de `--responder` cria uma auditoria antes da chamada e a conclui com resposta, ID externo, modelo, tokens, duração e fontes. Falhas também são registradas. A saída informa `auditoria_id`; chaves da API nunca são persistidas.
+
+```powershell
+tjsp-auditoria --limite 20
+tjsp-auditoria 1 --json
+```
+
+## Avaliação jurídica
+
+O arquivo [evals/casos.example.jsonl](evals/casos.example.jsonl) mostra o formato do dataset. Cada linha define pergunta, filtros, chunks ou acórdãos relevantes, termos esperados, resposta de referência e limiares.
+
+Avaliação local de recuperação, sem chamada tarifada:
+
+```powershell
+tjsp-avaliar evals/casos.example.jsonl `
+  --sqlite-path data/tjsp.sqlite3 `
+  --chroma-path data/chroma `
+  --saida output/avaliacao.json
+```
+
+Avaliação completa, gerando resposta e usando segunda chamada Maritaca como juiz:
+
+```powershell
+tjsp-avaliar evals/casos.example.jsonl `
+  --gerar-respostas `
+  --juiz-ia `
+  --modelo sabia-4
+```
+
+`--gerar-respostas` e `--juiz-ia` podem gerar cobrança. O relatório mede `recall`, `hit`, MRR, cobertura dos termos, precisão/cobertura das citações e similaridade com resposta de referência. O juiz opcional pontua aderência às fontes, correção jurídica, completude e citações. Resultados e chamadas ficam auditados no SQLite.
+
+Pontuação do juiz de IA é sinal heurístico para regressão, não substitui revisão jurídica humana.
 
 ## Controles de carga
 

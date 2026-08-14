@@ -34,8 +34,23 @@ class PacoteContextoIA:
         return asdict(self)
 
 
+@dataclass(slots=True, frozen=True)
+class RespostaIA:
+    texto: str
+    provedor: str
+    modelo: str
+    resposta_id: str = ""
+    tokens_entrada: int | None = None
+    tokens_saida: int | None = None
+    tokens_total: int | None = None
+    duracao_ms: int | None = None
+
+    def como_dict(self) -> dict:
+        return asdict(self)
+
+
 class ProvedorIA(Protocol):
-    def responder(self, pacote: PacoteContextoIA) -> str: ...
+    def responder(self, pacote: PacoteContextoIA) -> RespostaIA: ...
 
 
 class PreparadorContextoIA:
