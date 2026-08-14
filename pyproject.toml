@@ -4,25 +4,38 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scraping-tjsp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Coletor responsável de jurisprudência pública do TJSP (CJSG)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "beautifulsoup4>=4.12,<5",
+  "chromadb>=1.5,<2",
+  "pymupdf>=1.26,<2",
   "requests>=2.32,<3",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9"]
+dev = ["pytest>=8,<9", "ruff>=0.12,<1"]
 
 [project.scripts]
 tjsp-jurisprudencia = "scraping_tjsp.cli:main"
+tjsp-busca = "scraping_tjsp.search_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+scraping_tjsp = ["schema_sqlite.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "RUF", "UP"]

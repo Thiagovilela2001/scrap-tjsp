@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import ClassVar
+from urllib.parse import urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -27,8 +29,15 @@ class _Limitador:
 
 class TJSPClient:
     BASE_URL = "https://esaj.tjsp.jus.br/cjsg/"
-    TIPOS = {"acordao": "A", "homologacao": "H", "monocratica": "D"}
-    ORIGENS = {"segundo_grau": "T", "colegio_recursal": "R"}
+    TIPOS: ClassVar[dict[str, str]] = {
+        "acordao": "A",
+        "homologacao": "H",
+        "monocratica": "D",
+    }
+    ORIGENS: ClassVar[dict[str, str]] = {
+        "segundo_grau": "T",
+        "colegio_recursal": "R",
+    }
 
     def __init__(
         self,
@@ -44,7 +53,9 @@ class TJSPClient:
         self._limitador = _Limitador(intervalo)
         self._configurar_session()
 
-    def pesquisar(self, consulta: Consulta, *, max_paginas: int = 1) -> ResultadoPesquisa:
+    def pesquisar(
+        self, consulta: Consulta, *, max_paginas: int = 1
+    ) -> ResultadoPesquisa:
         consulta.validar()
         if max_paginas < 1:
             raise ValueError("max_paginas deve ser pelo menos 1.")
@@ -104,11 +115,29 @@ class TJSPClient:
         self.session.mount("https://", HTTPAdapter(max_retries=retentativas))
 
     def _requisicao(self, metodo: str, caminho: str, **kwargs) -> requests.Response:
+        return self._requisicao_url(metodo, f"{self.BASE_URL}{caminho}", **kwargs)
+
+    def obter_pdf(self, url: str) -> requests.Response:
+        destino = urlsplit(url)
+        if (
+            destino.scheme != "https"
+            or destino.hostname != "esaj.tjsp.jus.br"
+            or destino.path != "/cjsg/getArquivo.do"
+        ):
+            raise ValueError("URL de PDF fora do endpoint público permitido do TJSP.")
+        return self._requisicao_url(
+            "GET",
+            url,
+            stream=True,
+            headers={"Accept": "application/pdf"},
+        )
+
+    def _requisicao_url(self, metodo: str, url: str, **kwargs) -> requests.Response:
         self._limitador.aguardar()
         try:
             resposta = self.session.request(
                 metodo,
-                f"{self.BASE_URL}{caminho}",
+                url,
                 timeout=self.timeout,
                 **kwargs,
             )

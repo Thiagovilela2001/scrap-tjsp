@@ -1,6 +1,5 @@
 from scraping_tjsp.parser import numero_paginas, parsear_pagina
 
-
 HTML = """
 <html><body>
   <input id="totalResultadoAbaRetornoFiltro-A" value="21">
@@ -42,6 +41,7 @@ def test_parseia_resultado_e_prefere_ementa_completa():
     assert decisao.orgao_julgador == "1ª Câmara"
     assert decisao.ementa == "Texto completo da decisão."
     assert decisao.ocorrencias == 7
+    assert "casChecked=true" in decisao.inteiro_teor_url
     assert decisao.inteiro_teor_url.endswith("cdAcordao=123&cdForo=0")
 
 
