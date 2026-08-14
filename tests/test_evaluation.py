@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -86,3 +87,21 @@ def test_carrega_dataset_jsonl(tmp_path: Path):
     casos = carregar_casos(caminho)
 
     assert casos[0].caso_id == "1"
+
+
+def test_dataset_juridico_tem_vinte_fontes_rastreaveis():
+    caminho = Path(__file__).parents[1] / "evals" / "casos.jsonl"
+
+    casos = carregar_casos(caminho)
+    linhas = [
+        json.loads(linha) for linha in caminho.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert len(casos) == 20
+    assert len({caso.acordaos_relevantes[0] for caso in casos}) == 20
+    assert sum(not caso.filtros for caso in casos) == 5
+    assert all(item["processo"] for item in linhas)
+    assert all(
+        item["fonte_url"].startswith("https://esaj.tjsp.jus.br/cjsg/getArquivo.do?")
+        for item in linhas
+    )

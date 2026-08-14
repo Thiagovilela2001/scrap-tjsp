@@ -159,12 +159,20 @@ tjsp-auditoria 1 --json
 
 ## Avaliação jurídica
 
-O arquivo [evals/casos.example.jsonl](evals/casos.example.jsonl) mostra o formato do dataset. Cada linha define pergunta, filtros, chunks ou acórdãos relevantes, termos esperados, resposta de referência e limiares.
+O arquivo [evals/casos.jsonl](evals/casos.jsonl) contém 20 casos reais e rastreáveis; [evals/casos.example.jsonl](evals/casos.example.jsonl) mostra o formato mínimo. Cada linha define pergunta, filtros, chunks ou acórdãos relevantes, termos esperados, resposta de referência, limiares e a URL oficial da fonte. Consulte [evals/README.md](evals/README.md) para conhecer o recorte.
+
+Preparação reproduzível das fontes e avaliação local completa:
+
+```powershell
+tjsp-preparar-dataset evals/casos.jsonl
+```
+
+O comando baixa os PDFs oficiais ausentes, reutiliza arquivos válidos, processa OCR quando necessário e popula SQLite + Chroma antes de avaliar. Nenhuma chamada à Maritaca é feita.
 
 Avaliação local de recuperação, sem chamada tarifada:
 
 ```powershell
-tjsp-avaliar evals/casos.example.jsonl `
+tjsp-avaliar evals/casos.jsonl `
   --sqlite-path data/tjsp.sqlite3 `
   --chroma-path data/chroma `
   --saida output/avaliacao.json
@@ -173,7 +181,7 @@ tjsp-avaliar evals/casos.example.jsonl `
 Avaliação completa, gerando resposta e usando segunda chamada Maritaca como juiz:
 
 ```powershell
-tjsp-avaliar evals/casos.example.jsonl `
+tjsp-avaliar evals/casos.jsonl `
   --gerar-respostas `
   --juiz-ia `
   --modelo sabia-4

@@ -25,6 +25,7 @@ tjsp-jurisprudencia = "scraping_tjsp.cli:main"
 tjsp-busca = "scraping_tjsp.search_cli:main"
 tjsp-avaliar = "scraping_tjsp.evaluation_cli:main"
 tjsp-auditoria = "scraping_tjsp.audit_cli:main"
+tjsp-preparar-dataset = "scraping_tjsp.dataset_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

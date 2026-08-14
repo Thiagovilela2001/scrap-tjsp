@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+import argparse
+from collections.abc import Sequence
+from pathlib import Path
+
+from .client import TJSPClient
+from .dataset import PreparadorDataset, carregar_fontes_dataset
+from .downloader import PDFDownloader
+from .evaluation_cli import main as avaliar
+from .processor import ProcessadorPDF
+from .storage import RepositorioSQLite
+from .vector_store import RepositorioChunksChroma
+
+
+def construir_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="tjsp-preparar-dataset",
+        description="Baixa, processa, indexa e avalia fontes exatas de um dataset.",
+    )
+    parser.add_argument("dataset", type=Path, help="Dataset jurídico em JSONL.")
+    parser.add_argument("--intervalo", type=float, default=2.0)
+    parser.add_argument("--max-fontes", type=int, default=None)
+    parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
+    parser.add_argument("--chroma-path", type=Path, default=Path("data/chroma"))
+    parser.add_argument("--diretorio-pdfs", type=Path, default=Path("data/pdfs"))
+    parser.add_argument("--max-mb-pdf", type=int, default=50)
+    parser.add_argument("--sem-ocr", action="store_true")
+    parser.add_argument("--tamanho-chunk", type=int, default=1500)
+    parser.add_argument("--sobreposicao-chunk", type=int, default=200)
+    parser.add_argument(
+        "--sem-avaliacao",
+        action="store_true",
+        help="Prepara as fontes sem executar tjsp-avaliar ao final.",
+    )
+    parser.add_argument(
+        "--saida-avaliacao",
+        type=Path,
+        default=Path("output/avaliacao.json"),
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = construir_parser()
+    args = parser.parse_args(argv)
+    if args.max_fontes is not None and args.max_fontes < 1:
+        parser.error("--max-fontes deve ser pelo menos 1.")
+    if args.max_mb_pdf < 1:
+        parser.error("--max-mb-pdf deve ser pelo menos 1.")
+
+    fontes = carregar_fontes_dataset(args.dataset)
+    if (
+        args.max_fontes is not None
+        and args.max_fontes < len(fontes)
+        and not args.sem_avaliacao
+    ):
+        parser.error("Preparação parcial com --max-fontes exige --sem-avaliacao.")
+
+    cliente = TJSPClient(intervalo=args.intervalo)
+    resultado = PreparadorDataset(
+        RepositorioSQLite(args.sqlite_path),
+        PDFDownloader(
+            cliente,
+            diretorio=args.diretorio_pdfs,
+            limite_bytes=args.max_mb_pdf * 1024 * 1024,
+        ),
+        ProcessadorPDF(
+            tamanho_chunk=args.tamanho_chunk,
+            sobreposicao=args.sobreposicao_chunk,
+            habilitar_ocr=not args.sem_ocr,
+        ),
+        RepositorioChunksChroma(args.chroma_path),
+    ).preparar(
+        fontes,
+        nome_dataset=args.dataset.name,
+        limite=args.max_fontes,
+    )
+    print(
+        f"Fontes: {resultado.total_fontes}; "
+        f"PDFs: {resultado.baixados} ({resultado.reutilizados} reutilizados), "
+        f"erros: {resultado.erros_download}; "
+        f"processados: {resultado.processados}, "
+        f"erros: {resultado.erros_processamento}; "
+        f"chunks: {resultado.chunks_indexados}"
+    )
+    if not resultado.aprovado:
+        return 1
+    if args.sem_avaliacao:
+        return 0
+    return avaliar(
+        [
+            str(args.dataset),
+            "--sqlite-path",
+            str(args.sqlite_path),
+            "--chroma-path",
+            str(args.chroma_path),
+            "--saida",
+            str(args.saida_avaliacao),
+        ]
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
