@@ -4,9 +4,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Literal
 
-
 TipoDecisao = Literal["acordao", "homologacao", "monocratica"]
 Origem = Literal["segundo_grau", "colegio_recursal"]
+MetodoExtracao = Literal["nativo", "ocr", "vazio"]
+StatusProcessamento = Literal["processado", "parcial"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -22,6 +23,9 @@ class Consulta:
     origem: Origem = "segundo_grau"
     tipo_decisao: TipoDecisao = "acordao"
     pesquisar_sinonimos: bool = True
+
+    def como_dict(self) -> dict:
+        return asdict(self)
 
     def validar(self) -> None:
         if self.tipo_decisao not in ("acordao", "homologacao", "monocratica"):
@@ -82,6 +86,56 @@ class ResultadoPesquisa:
     total_disponivel: int
     paginas_coletadas: int
     decisoes: tuple[Decisao, ...]
+
+
+@dataclass(slots=True, frozen=True)
+class DocumentoBaixado:
+    cd_acordao: str
+    url_origem: str
+    caminho_local: str
+    mime_type: str
+    tamanho_bytes: int
+    sha256: str
+    reutilizado: bool = False
+
+
+@dataclass(slots=True, frozen=True)
+class PaginaExtraida:
+    numero: int
+    texto: str
+    metodo: MetodoExtracao
+    erro: str = ""
+
+
+@dataclass(slots=True, frozen=True)
+class ChunkJuridico:
+    cd_acordao: str
+    pagina: int
+    indice: int
+    texto: str
+
+    @property
+    def identificador(self) -> str:
+        return f"acordao:{self.cd_acordao}:pagina:{self.pagina}:chunk:{self.indice}"
+
+
+@dataclass(slots=True, frozen=True)
+class ResultadoProcessamento:
+    cd_acordao: str
+    caminho_local: str
+    sha256: str
+    total_paginas: int
+    paginas: tuple[PaginaExtraida, ...]
+    chunks: tuple[ChunkJuridico, ...]
+    status: StatusProcessamento
+
+    @property
+    def paginas_com_texto(self) -> int:
+        return sum(bool(pagina.texto) for pagina in self.paginas)
+
+    @property
+    def paginas_ocr(self) -> int:
+        return sum(pagina.metodo == "ocr" for pagina in self.paginas)
 
 
 def _data(valor: str) -> datetime:

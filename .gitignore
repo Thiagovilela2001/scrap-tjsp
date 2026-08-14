@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 .agents/
 skills-lock.json
+.env
+data/
 dist/
 build/
 *.egg-info/

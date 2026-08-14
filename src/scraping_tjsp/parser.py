@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup, Tag
 
 from .models import Decisao
 
-
 BASE_URL = "https://esaj.tjsp.jus.br/cjsg/getArquivo.do"
 RESULTADOS_POR_PAGINA = 20
 
@@ -58,11 +57,15 @@ def _extrair_total(soup: BeautifulSoup, quantidade_linhas: int) -> int:
             return int(str(campo["value"]))
 
     texto = _texto(soup)
-    if any(frase in texto.casefold() for frase in ("nenhum resultado", "sem resultados")):
+    if any(
+        frase in texto.casefold() for frase in ("nenhum resultado", "sem resultados")
+    ):
         return 0
     if quantidade_linhas:
         return quantidade_linhas
-    raise RuntimeError("Não foi possível identificar a quantidade de resultados do TJSP.")
+    raise RuntimeError(
+        "Não foi possível identificar a quantidade de resultados do TJSP."
+    )
 
 
 def _parsear_decisao(linha: Tag) -> Decisao:
@@ -79,7 +82,7 @@ def _parsear_decisao(linha: Tag) -> Decisao:
 
     ementa = _ementa_completa(linha)
     ocorrencias = _ocorrencias(linha)
-    inteiro_teor_url = f"{BASE_URL}?{urlencode({'cdAcordao': cd_acordao, 'cdForo': cd_foro})}"
+    inteiro_teor_url = f"{BASE_URL}?{urlencode({'casChecked': 'true', 'cdAcordao': cd_acordao, 'cdForo': cd_foro})}"
 
     return Decisao(
         processo=processo,
@@ -131,7 +134,9 @@ def _ementa_completa(linha: Tag) -> str:
     if textos:
         return max(textos, key=len)
 
-    identificador = str(linha.select_one("a.downloadEmenta[cdacordao]").get("cdacordao", ""))
+    identificador = str(
+        linha.select_one("a.downloadEmenta[cdacordao]").get("cdacordao", "")
+    )
     sem_formatacao = linha.select_one(f"#textAreaDados_{identificador}")
     return _texto(sem_formatacao, separador="\n") if sem_formatacao else ""
 
@@ -157,4 +162,6 @@ def _texto(tag: Tag | BeautifulSoup | None, separador: str = " ") -> str:
 
 def _sem_acentos(valor: str) -> str:
     normalizado = unicodedata.normalize("NFKD", valor)
-    return "".join(caractere for caractere in normalizado if not unicodedata.combining(caractere))
+    return "".join(
+        caractere for caractere in normalizado if not unicodedata.combining(caractere)
+    )
