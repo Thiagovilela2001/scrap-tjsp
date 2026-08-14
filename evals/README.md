@@ -4,7 +4,19 @@
 
 O recorte foi coletado em 14/08/2026, pela consulta pública CJSG, com quatro PDFs por pesquisa e intervalo de um segundo. Pesquisas usadas: `dano moral`, `prescrição intercorrente`, `tutela de urgência`, `responsabilidade objetiva`, `embargos de declaração` e `fraude bancária`. Resultados podem mudar; `cd_acordao` e `fonte_url` preservam a identidade da fonte avaliada.
 
-O dataset não inclui os PDFs nem dados pessoais extraídos. Antes de avaliar, as fontes indicadas precisam estar processadas no SQLite e no Chroma locais.
+O dataset não inclui os PDFs nem dados pessoais extraídos. Para reconstruir a base local e executar a avaliação em uma única etapa:
+
+```powershell
+tjsp-preparar-dataset evals/casos.jsonl
+```
+
+O comando valida a correspondência entre URL e `cd_acordao`, baixa somente do endpoint público permitido, reutiliza PDFs locais válidos, processa texto/OCR, indexa SQLite + Chroma e chama `tjsp-avaliar`. Ele não chama a Maritaca.
+
+Para preparar apenas uma amostra, sem avaliar o dataset incompleto:
+
+```powershell
+tjsp-preparar-dataset evals/casos.jsonl --max-fontes 2 --sem-avaliacao
+```
 
 Avaliação somente local, sem chamada à Maritaca:
 

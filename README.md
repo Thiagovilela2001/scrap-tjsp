@@ -161,6 +161,14 @@ tjsp-auditoria 1 --json
 
 O arquivo [evals/casos.jsonl](evals/casos.jsonl) contém 20 casos reais e rastreáveis; [evals/casos.example.jsonl](evals/casos.example.jsonl) mostra o formato mínimo. Cada linha define pergunta, filtros, chunks ou acórdãos relevantes, termos esperados, resposta de referência, limiares e a URL oficial da fonte. Consulte [evals/README.md](evals/README.md) para conhecer o recorte.
 
+Preparação reproduzível das fontes e avaliação local completa:
+
+```powershell
+tjsp-preparar-dataset evals/casos.jsonl
+```
+
+O comando baixa os PDFs oficiais ausentes, reutiliza arquivos válidos, processa OCR quando necessário e popula SQLite + Chroma antes de avaliar. Nenhuma chamada à Maritaca é feita.
+
 Avaliação local de recuperação, sem chamada tarifada:
 
 ```powershell
