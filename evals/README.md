@@ -27,4 +27,17 @@ tjsp-avaliar evals/casos.jsonl `
   --saida output/avaliacao.json
 ```
 
+Smoke de cinco respostas Maritaca, sem a segunda chamada do juiz:
+
+```powershell
+tjsp-avaliar evals/casos.jsonl `
+  --max-casos 5 `
+  --gerar-respostas `
+  --modelo sabia-4
+```
+
+Esse comando pode gerar cobrança por cinco chamadas.
+
 O arquivo `casos.example.jsonl` permanece como exemplo mínimo de formato.
+
+Em `termos_esperados`, use `|` para alternativas lexicalmente equivalentes, por exemplo `prova técnica|prova pericial`. Uma alternativa encontrada satisfaz o termo.

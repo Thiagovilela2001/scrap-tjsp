@@ -21,6 +21,12 @@ def construir_parser() -> argparse.ArgumentParser:
         description="Avalia recuperação, citações e respostas jurídicas do pipeline.",
     )
     parser.add_argument("dataset", type=Path, help="Casos de avaliação em JSONL.")
+    parser.add_argument(
+        "--max-casos",
+        type=int,
+        default=None,
+        help="Avalia somente os primeiros N casos do dataset.",
+    )
     parser.add_argument("--limite", type=int, default=6)
     parser.add_argument("--max-caracteres", type=int, default=12_000)
     parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
@@ -46,8 +52,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.juiz_ia and not args.gerar_respostas:
         parser.error("--juiz-ia exige --gerar-respostas.")
+    if args.max_casos is not None and args.max_casos < 1:
+        parser.error("--max-casos deve ser pelo menos 1.")
     load_dotenv()
     casos = carregar_casos(args.dataset)
+    if args.max_casos is not None:
+        casos = casos[: args.max_casos]
     sqlite = RepositorioSQLite(args.sqlite_path)
     sqlite.inicializar()
     preparador = PreparadorContextoIA(
@@ -113,6 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     relatorio = avaliador.relatorio(resultados)
     configuracao = {
+        "max_casos": args.max_casos,
         "limite": args.limite,
         "max_caracteres": args.max_caracteres,
         "gerar_respostas": args.gerar_respostas,
