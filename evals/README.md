@@ -33,10 +33,12 @@ Smoke de cinco respostas Maritaca, sem a segunda chamada do juiz:
 tjsp-avaliar evals/casos.jsonl `
   --max-casos 5 `
   --gerar-respostas `
-  --modelo sabia-4
+  --modelo sabia-4 `
+  --max-output-tokens 800 `
+  --max-custo-brl 0.40
 ```
 
-Esse comando pode gerar cobrança por cinco chamadas.
+Esse comando pode gerar cobrança por cinco chamadas, mas aborta antes da primeira se a estimativa conservadora superar R$ 0,40. O relatório registra preços, teto, tokens e custo padrão estimado. Não combine o teto com `--juiz-ia`.
 
 O arquivo `casos.example.jsonl` permanece como exemplo mínimo de formato.
 
