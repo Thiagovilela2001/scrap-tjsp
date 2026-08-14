@@ -5,6 +5,9 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+from .maritaca import ErroMaritaca, ProvedorMaritaca
 from .rag import PreparadorContextoIA
 from .search import BuscaHibrida
 from .storage import RepositorioSQLite
@@ -31,25 +34,69 @@ def construir_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Produz pacote RAG pronto para um provedor de IA.",
     )
+    parser.add_argument(
+        "--responder",
+        action="store_true",
+        help="Envia o contexto recuperado para a API Maritaca.",
+    )
+    parser.add_argument(
+        "--modelo",
+        default=None,
+        help="Modelo Maritaca; padrão: MARITACA_MODEL ou sabia-4.",
+    )
+    parser.add_argument("--max-output-tokens", type=int, default=2_000)
     parser.add_argument("--max-caracteres", type=int, default=12_000)
     parser.add_argument("--json", action="store_true")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = construir_parser().parse_args(argv)
+    parser = construir_parser()
+    args = parser.parse_args(argv)
+    load_dotenv()
     sqlite = RepositorioSQLite(args.sqlite_path)
     sqlite.inicializar()
     busca = BuscaHibrida(sqlite, RepositorioChunksChroma(args.chroma_path))
     filtros = _filtros(args)
 
-    if args.contexto_ia:
+    if args.contexto_ia or args.responder:
         pacote = PreparadorContextoIA(busca).preparar(
             args.consulta,
             limite_fontes=args.limite,
             max_caracteres=args.max_caracteres,
             filtros=filtros,
         )
+        if args.responder:
+            try:
+                provedor = ProvedorMaritaca(
+                    modelo=args.modelo,
+                    max_output_tokens=args.max_output_tokens,
+                )
+                resposta = provedor.responder(pacote)
+            except ErroMaritaca as exc:
+                parser.error(str(exc))
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "provedor": "maritaca",
+                            "modelo": provedor.modelo,
+                            "resposta": resposta,
+                            "fontes": pacote.como_dict()["fontes"],
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                )
+            else:
+                print(resposta)
+                if pacote.fontes:
+                    print("\nFontes:")
+                    for fonte in pacote.fontes:
+                        print(f"- [Fonte {fonte.numero}] {fonte.citacao}")
+                        if fonte.url:
+                            print(f"  {fonte.url}")
+            return 0
         print(json.dumps(pacote.como_dict(), ensure_ascii=False, indent=2))
         return 0
 

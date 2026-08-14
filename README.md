@@ -121,7 +121,30 @@ tjsp-busca "Quando o TJSP reconhece dano moral?" `
   --json
 ```
 
-O resultado contém instruções de sistema, pergunta, fontes, URLs, citações e trechos limitados por tamanho. `ProvedorIA` define a interface neutra para conectar depois OpenAI, Azure, modelo local ou outro serviço. Nenhuma chamada externa de IA ocorre nesta versão.
+O resultado contém instruções de sistema, pergunta, fontes, URLs, citações e trechos limitados por tamanho. `ProvedorIA` mantém a recuperação desacoplada do modelo. Sem `--responder`, nenhuma chamada externa de IA ocorre.
+
+### Resposta com Maritaca AI
+
+O adaptador usa a Responses API compatível com OpenAI, recomendada pela [documentação da Maritaca](https://docs.maritaca.ai/pt/responses-api), com `sabia-4` como modelo padrão.
+
+```powershell
+Copy-Item .env.example .env
+# Edite .env e informe MARITACA_API_KEY sem aspas.
+
+tjsp-busca "Quando o TJSP reconhece dano moral?" `
+  --limite 6 `
+  --responder `
+  --modelo sabia-4 `
+  --json
+```
+
+Também é possível definir a chave somente na sessão:
+
+```powershell
+$env:MARITACA_API_KEY = "sua-chave"
+```
+
+`.env` está ignorado pelo Git. `--responder` faz chamada externa potencialmente tarifada; `--contexto-ia` apenas prepara o pacote local, sem chamar o modelo.
 
 ## Controles de carga
 

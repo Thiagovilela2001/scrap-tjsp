@@ -2,6 +2,7 @@
 
 from .client import TJSPClient
 from .downloader import DownloadPDFError, PDFDownloader
+from .maritaca import ErroMaritaca, ProvedorMaritaca
 from .models import (
     ChunkJuridico,
     Consulta,
@@ -24,6 +25,7 @@ __all__ = [
     "Decisao",
     "DocumentoBaixado",
     "DownloadPDFError",
+    "ErroMaritaca",
     "PDFDownloader",
     "PacoteContextoIA",
     "PaginaExtraida",
@@ -31,6 +33,7 @@ __all__ = [
     "ProcessadorPDF",
     "ProcessamentoPDFError",
     "ProvedorIA",
+    "ProvedorMaritaca",
     "RepositorioChroma",
     "RepositorioChunksChroma",
     "RepositorioSQLite",
