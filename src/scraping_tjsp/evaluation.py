@@ -261,7 +261,10 @@ def _similaridade_jaccard(texto: str, referencia: str) -> float | None:
 
 def _normalizar(texto: str) -> str:
     decomposicao = unicodedata.normalize("NFKD", texto.casefold())
-    return "".join(item for item in decomposicao if not unicodedata.combining(item))
+    sem_acentos = "".join(
+        item for item in decomposicao if not unicodedata.combining(item)
+    )
+    return re.sub(r"[^\w]+", " ", sem_acentos).strip()
 
 
 def _cd_acordao(chunk_id: str) -> str:
