@@ -72,16 +72,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                     modelo=args.modelo,
                     max_output_tokens=args.max_output_tokens,
                 )
-                resposta = provedor.responder(pacote)
             except ErroMaritaca as exc:
                 parser.error(str(exc))
+            execucao_id = sqlite.iniciar_execucao_ia(
+                pacote,
+                provedor="maritaca",
+                modelo=provedor.modelo,
+                configuracao={
+                    "limite_fontes": args.limite,
+                    "max_caracteres": args.max_caracteres,
+                    "max_output_tokens": args.max_output_tokens,
+                    "filtros": filtros,
+                },
+            )
+            try:
+                resposta = provedor.responder(pacote)
+            except ErroMaritaca as exc:
+                sqlite.falhar_execucao_ia(
+                    execucao_id,
+                    str(exc),
+                    duracao_ms=exc.duracao_ms,
+                )
+                parser.error(str(exc))
+            sqlite.concluir_execucao_ia(execucao_id, resposta)
             if args.json:
                 print(
                     json.dumps(
                         {
-                            "provedor": "maritaca",
-                            "modelo": provedor.modelo,
-                            "resposta": resposta,
+                            "auditoria_id": execucao_id,
+                            **resposta.como_dict(),
                             "fontes": pacote.como_dict()["fontes"],
                         },
                         ensure_ascii=False,
@@ -89,7 +108,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 )
             else:
-                print(resposta)
+                print(resposta.texto)
+                print(f"\nAuditoria SQLite: {execucao_id}")
                 if pacote.fontes:
                     print("\nFontes:")
                     for fonte in pacote.fontes:
