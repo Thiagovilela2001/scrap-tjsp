@@ -7,6 +7,7 @@ from scraping_tjsp.evaluation import (
     AvaliadorJuridico,
     CasoAvaliacao,
     JuizJuridicoIA,
+    _cobertura_termos,
     carregar_casos,
 )
 from scraping_tjsp.evaluation_cli import construir_parser, main
@@ -99,6 +100,15 @@ def test_aceita_citacoes_agrupadas_e_alternativas_lexicais():
 
     assert resultado["aprovado"] is True
     assert resultado["metricas_resposta"]["precisao_citacoes"] == 1
+
+
+def test_cobertura_de_termos_ignora_formatacao_markdown():
+    cobertura = _cobertura_termos(
+        "Foram reconhecidos danos morais *in re ipsa*.",
+        ("danos morais in re ipsa",),
+    )
+
+    assert cobertura == 1
 
 
 def test_carrega_dataset_jsonl(tmp_path: Path):
