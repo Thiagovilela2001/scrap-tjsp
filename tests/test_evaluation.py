@@ -140,3 +140,21 @@ def test_parser_aceita_limite_de_casos():
 def test_cli_recusa_limite_de_casos_invalido():
     with pytest.raises(SystemExit):
         main(["casos.jsonl", "--max-casos", "0"])
+
+
+def test_cli_exige_geracao_para_limite_de_custo():
+    with pytest.raises(SystemExit):
+        main(["casos.jsonl", "--max-custo-brl", "0.20"])
+
+
+def test_cli_recusa_limite_de_custo_com_juiz():
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "casos.jsonl",
+                "--gerar-respostas",
+                "--juiz-ia",
+                "--max-custo-brl",
+                "0.20",
+            ]
+        )

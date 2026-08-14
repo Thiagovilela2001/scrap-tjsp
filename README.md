@@ -195,8 +195,12 @@ Para um smoke controlado, limite a quantidade de chamadas pagas e deixe o juiz d
 tjsp-avaliar evals/casos.jsonl `
   --max-casos 5 `
   --gerar-respostas `
-  --modelo sabia-4
+  --modelo sabia-4 `
+  --max-output-tokens 800 `
+  --max-custo-brl 0.40
 ```
+
+O teto usa uma estimativa conservadora antes de qualquer chamada. Os preços padrão do Sabiá 4, verificados em 14/08/2026, são R$ 5,00 por milhão de tokens de entrada e R$ 20,00 por milhão de tokens de saída. Atualize-os com `--preco-entrada-milhao` e `--preco-saida-milhao` quando a tabela mudar. O limite ainda não pode ser combinado com `--juiz-ia`.
 
 Pontuação do juiz de IA é sinal heurístico para regressão, não substitui revisão jurídica humana.
 

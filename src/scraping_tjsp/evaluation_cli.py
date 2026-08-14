@@ -7,6 +7,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .cost import PrecosTokens, estimar_custo_maximo, resumir_custo
 from .evaluation import AvaliadorJuridico, JuizJuridicoIA, carregar_casos
 from .maritaca import ErroMaritaca, ProvedorMaritaca
 from .rag import PacoteContextoIA, PreparadorContextoIA, RespostaIA
@@ -44,6 +45,14 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--modelo", default=None)
     parser.add_argument("--max-output-tokens", type=int, default=2_000)
+    parser.add_argument(
+        "--max-custo-brl",
+        type=float,
+        default=None,
+        help="Teto conservador antes das chamadas; requer --gerar-respostas.",
+    )
+    parser.add_argument("--preco-entrada-milhao", type=float, default=5.0)
+    parser.add_argument("--preco-saida-milhao", type=float, default=20.0)
     return parser
 
 
@@ -54,6 +63,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--juiz-ia exige --gerar-respostas.")
     if args.max_casos is not None and args.max_casos < 1:
         parser.error("--max-casos deve ser pelo menos 1.")
+    if args.max_output_tokens < 1:
+        parser.error("--max-output-tokens deve ser pelo menos 1.")
+    if args.max_custo_brl is not None and args.max_custo_brl <= 0:
+        parser.error("--max-custo-brl deve ser positivo.")
+    if args.max_custo_brl is not None and not args.gerar_respostas:
+        parser.error("--max-custo-brl exige --gerar-respostas.")
+    if args.max_custo_brl is not None and args.juiz_ia:
+        parser.error("--max-custo-brl ainda não suporta --juiz-ia.")
+    try:
+        precos = PrecosTokens(
+            entrada_milhao=args.preco_entrada_milhao,
+            saida_milhao=args.preco_saida_milhao,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     load_dotenv()
     casos = carregar_casos(args.dataset)
     if args.max_casos is not None:
@@ -65,16 +89,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     avaliador = AvaliadorJuridico()
     juiz = JuizJuridicoIA()
+    casos_pacotes = [
+        (
+            caso,
+            preparador.preparar(
+                caso.pergunta,
+                limite_fontes=args.limite,
+                max_caracteres=args.max_caracteres,
+                filtros=caso.filtros,
+            ),
+        )
+        for caso in casos
+    ]
+    estimativa_maxima = None
+    if args.gerar_respostas and not args.juiz_ia:
+        estimativa_maxima = estimar_custo_maximo(
+            [pacote for _, pacote in casos_pacotes],
+            max_output_tokens=args.max_output_tokens,
+            precos=precos,
+        )
+        if args.max_custo_brl is not None and estimativa_maxima > args.max_custo_brl:
+            parser.error(
+                "Estimativa conservadora de "
+                f"R$ {estimativa_maxima:.4f} excede o teto de "
+                f"R$ {args.max_custo_brl:.4f}; nenhuma chamada foi feita."
+            )
     provedor = _provedor(args, parser) if args.gerar_respostas else None
     resultados = []
+    respostas_cobradas = []
 
-    for caso in casos:
-        pacote = preparador.preparar(
-            caso.pergunta,
-            limite_fontes=args.limite,
-            max_caracteres=args.max_caracteres,
-            filtros=caso.filtros,
-        )
+    for caso, pacote in casos_pacotes:
         resposta = None
         resultado_juiz = None
         erros = []
@@ -93,6 +137,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             if erro:
                 erros.append(erro)
+            elif resposta:
+                respostas_cobradas.append(resposta)
         if args.juiz_ia and provedor and resposta:
             pacote_juiz = juiz.preparar(caso, pacote, resposta)
             resposta_juiz, erro, execucao_id = _responder_auditado(
@@ -107,6 +153,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if erro:
                 erros.append(erro)
             elif resposta_juiz:
+                respostas_cobradas.append(resposta_juiz)
                 try:
                     resultado_juiz = juiz.interpretar(resposta_juiz)
                 except ValueError as exc:
@@ -122,6 +169,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         resultados.append(resultado)
 
     relatorio = avaliador.relatorio(resultados)
+    custos = resumir_custo(
+        respostas_cobradas,
+        precos=precos,
+        estimativa_maxima=estimativa_maxima,
+        limite_brl=args.max_custo_brl,
+    )
+    relatorio["custos"] = custos
+    relatorio["resumo"]["custo_padrao_estimado_brl"] = custos[
+        "custo_padrao_estimado_brl"
+    ]
     configuracao = {
         "max_casos": args.max_casos,
         "limite": args.limite,
@@ -129,6 +186,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "gerar_respostas": args.gerar_respostas,
         "juiz_ia": args.juiz_ia,
         "modelo": provedor.modelo if provedor else None,
+        "max_custo_brl": args.max_custo_brl,
+        "preco_entrada_milhao": precos.entrada_milhao,
+        "preco_saida_milhao": precos.saida_milhao,
     }
     avaliacao_id = sqlite.registrar_avaliacao(
         relatorio,
