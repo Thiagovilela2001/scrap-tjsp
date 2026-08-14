@@ -189,6 +189,15 @@ tjsp-avaliar evals/casos.jsonl `
 
 `--gerar-respostas` e `--juiz-ia` podem gerar cobrança. O relatório mede `recall`, `hit`, MRR, cobertura dos termos, precisão/cobertura das citações e similaridade com resposta de referência. O juiz opcional pontua aderência às fontes, correção jurídica, completude e citações. Resultados e chamadas ficam auditados no SQLite.
 
+Para um smoke controlado, limite a quantidade de chamadas pagas e deixe o juiz desligado:
+
+```powershell
+tjsp-avaliar evals/casos.jsonl `
+  --max-casos 5 `
+  --gerar-respostas `
+  --modelo sabia-4
+```
+
 Pontuação do juiz de IA é sinal heurístico para regressão, não substitui revisão jurídica humana.
 
 ## Controles de carga

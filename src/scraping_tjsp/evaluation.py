@@ -214,7 +214,7 @@ def _metricas_resposta(
             "cobertura_termos": None,
             "similaridade_referencia": None,
         }
-    citadas = {int(item) for item in re.findall(r"\[Fonte\s+(\d+)\]", resposta.texto)}
+    citadas = _fontes_citadas(resposta.texto)
     validas = {numero for numero in citadas if 1 <= numero <= len(pacote.fontes)}
     precisao = len(validas) / len(citadas) if citadas else 0.0
     cobertura = len(validas) / len(pacote.fontes) if pacote.fontes else 1.0
@@ -232,7 +232,22 @@ def _cobertura_termos(texto: str, termos: tuple[str, ...]) -> float:
     if not termos:
         return 1.0
     normalizado = _normalizar(texto)
-    return sum(_normalizar(termo) in normalizado for termo in termos) / len(termos)
+    encontrados = 0
+    for termo in termos:
+        alternativas = (item.strip() for item in termo.split("|"))
+        encontrados += any(
+            _normalizar(alternativa) in normalizado
+            for alternativa in alternativas
+            if alternativa
+        )
+    return encontrados / len(termos)
+
+
+def _fontes_citadas(texto: str) -> set[int]:
+    citadas = set()
+    for bloco in re.findall(r"\[([^\[\]]+)\]", texto):
+        citadas.update(int(item) for item in re.findall(r"\bFonte\s+(\d+)\b", bloco))
+    return citadas
 
 
 def _similaridade_jaccard(texto: str, referencia: str) -> float | None:

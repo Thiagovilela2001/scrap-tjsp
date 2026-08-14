@@ -9,6 +9,7 @@ from scraping_tjsp.evaluation import (
     JuizJuridicoIA,
     carregar_casos,
 )
+from scraping_tjsp.evaluation_cli import construir_parser, main
 from scraping_tjsp.rag import FonteContexto, PacoteContextoIA, RespostaIA
 
 
@@ -77,6 +78,29 @@ def test_interpreta_juiz_json_e_valida_notas():
     assert resultado["score_geral"] == pytest.approx(0.85)
 
 
+def test_aceita_citacoes_agrupadas_e_alternativas_lexicais():
+    pacote = _pacote()
+    caso = CasoAvaliacao.de_dict(
+        {
+            "caso_id": "alternativas",
+            "pergunta": "Quando cabem embargos?",
+            "acordaos_relevantes": ["123"],
+            "termos_esperados": ["prova técnica|omissão"],
+            "min_cobertura_termos": 1,
+        }
+    )
+    resposta = RespostaIA(
+        texto="Há omissão relevante [Fonte 1, Fonte 1].",
+        provedor="maritaca",
+        modelo="sabia-4",
+    )
+
+    resultado = AvaliadorJuridico().avaliar(caso, pacote, resposta=resposta)
+
+    assert resultado["aprovado"] is True
+    assert resultado["metricas_resposta"]["precisao_citacoes"] == 1
+
+
 def test_carrega_dataset_jsonl(tmp_path: Path):
     caminho = tmp_path / "casos.jsonl"
     caminho.write_text(
@@ -105,3 +129,14 @@ def test_dataset_juridico_tem_vinte_fontes_rastreaveis():
         item["fonte_url"].startswith("https://esaj.tjsp.jus.br/cjsg/getArquivo.do?")
         for item in linhas
     )
+
+
+def test_parser_aceita_limite_de_casos():
+    args = construir_parser().parse_args(["casos.jsonl", "--max-casos", "5"])
+
+    assert args.max_casos == 5
+
+
+def test_cli_recusa_limite_de_casos_invalido():
+    with pytest.raises(SystemExit):
+        main(["casos.jsonl", "--max-casos", "0"])
