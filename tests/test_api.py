@@ -235,12 +235,20 @@ def test_raiz_entrega_interface_e_assets(tmp_path: Path):
     assert resposta.status_code == 200
     assert "Pesquisa jurisprudencial" in resposta.text
     assert 'name="contexto_caso"' in resposta.text
+    assert 'aria-label="Etapas da pesquisa"' in resposta.text
+    assert 'data-etapa="analise"' in resposta.text
+    assert 'id="selecionar-recomendados"' in resposta.text
+    assert 'id="limpar-selecao"' in resposta.text
     assert "data-modo" not in resposta.text
     assert estilos.status_code == 200
     assert "--cor-tinta" in estilos.text
+    assert ".fluxo-iniciado .apresentacao" in estilos.text
+    assert ".detalhes-resultado" in estilos.text
     assert script.status_code == 200
     assert 'fetch("/saude")' in script.text
     assert "criarEntrevistaEsclarecimentos" in script.text
+    assert "criarDetalhesResultado" in script.text
+    assert "selecionarRecomendados" in script.text
     assert "[data-modo]" not in script.text
     assert "limitada pelo servidor a R$ 0,20" not in script.text
     assert "max_custo_analise_documental_brl" in script.text

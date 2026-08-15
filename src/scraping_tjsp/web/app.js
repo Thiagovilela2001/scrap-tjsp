@@ -4,6 +4,7 @@ const estado = {
   modo: "assistida",
   consultaTJSP: null,
   selecionados: new Set(),
+  recomendados: [],
   maxImportacao: 5,
   maxCustoAnaliseDocumentalBrl: null,
   perguntaContexto: null,
@@ -36,6 +37,11 @@ const barraImportacao = document.querySelector("#barra-importacao");
 const botaoImportar = document.querySelector("#botao-importar");
 const quantidadeSelecionada = document.querySelector("#quantidade-selecionada");
 const resultadoImportacao = document.querySelector("#resultado-importacao");
+const secaoResultados = document.querySelector("#secao-resultados");
+const etapasPesquisa = [...document.querySelectorAll("[data-etapa]")];
+const estadoEtapa = document.querySelector("#estado-etapa");
+const botaoSelecionarRecomendados = document.querySelector("#selecionar-recomendados");
+const botaoLimparSelecao = document.querySelector("#limpar-selecao");
 
 document.querySelectorAll("[data-consulta]").forEach((botao) => {
   botao.addEventListener("click", () => {
@@ -47,10 +53,28 @@ document.querySelectorAll("[data-consulta]").forEach((botao) => {
 formulario.addEventListener("submit", executarPesquisa);
 botaoAuditorias.addEventListener("click", carregarAuditorias);
 botaoImportar.addEventListener("click", importarSelecionados);
+botaoSelecionarRecomendados.addEventListener("click", selecionarRecomendados);
+botaoLimparSelecao.addEventListener("click", limparSelecao);
 
 alterarModo("assistida");
+atualizarEtapa("caso");
 verificarSaude();
 carregarAuditorias();
+
+function atualizarEtapa(etapa, concluida = false) {
+  const indiceAtual = etapasPesquisa.findIndex((item) => item.dataset.etapa === etapa);
+  etapasPesquisa.forEach((item, indice) => {
+    const ativa = indice === indiceAtual;
+    item.classList.toggle("ativa", ativa);
+    item.classList.toggle("concluida", indice < indiceAtual || (ativa && concluida));
+    if (ativa) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+  });
+  if (indiceAtual >= 0) {
+    const rotulo = etapasPesquisa[indiceAtual].querySelector("strong").textContent;
+    estadoEtapa.textContent = `Etapa ${indiceAtual + 1} de ${etapasPesquisa.length}: ${rotulo}`;
+  }
+}
 
 function alterarModo(modo) {
   estado.modo = ["busca", "ia", "tjsp", "assistida"].includes(modo) ? modo : "busca";
@@ -123,6 +147,10 @@ async function executarPesquisa(evento) {
   }
   estado.perguntaContexto = texto;
 
+  document.body.classList.add("fluxo-iniciado");
+  atualizarEtapa(
+    formulario.elements.contexto_caso.value.trim() ? "precedentes" : "esclarecimentos",
+  );
   prepararCarregamento();
   const limite = Number(formulario.elements.limite.value || 6);
   let endpoint;
@@ -178,6 +206,7 @@ async function executarPesquisa(evento) {
     } else {
       renderizarBusca(dados);
     }
+    focarResultados();
   } catch (erro) {
     exibirErro(erro instanceof Error ? erro.message : "Erro inesperado.");
   } finally {
@@ -259,7 +288,7 @@ function criarCartaoResultado(resultado, numero) {
   const metadata = resultado.metadata || {};
   conteudo.append(
     criarElemento("h3", "", metadata.citacao || `Acórdão ${metadata.cd_acordao || resultado.id}`),
-    criarElemento("p", "", limitarTexto(resultado.texto || "", 560)),
+    criarElemento("p", "ementa-resumo", limitarTexto(resultado.texto || "", 260)),
   );
   const metadados = criarElemento("div", "metadados-resultado");
   const origem = Array.isArray(resultado.origens) ? resultado.origens.join(" + ") : "híbrida";
@@ -267,7 +296,13 @@ function criarCartaoResultado(resultado, numero) {
   if (metadata.classe) metadados.append(criarElemento("span", "", metadata.classe));
   if (metadata.assunto) metadados.append(criarElemento("span", "", metadata.assunto));
   if (metadata.pagina) metadados.append(criarElemento("span", "", `p. ${metadata.pagina}`));
-  conteudo.append(metadados);
+  conteudo.append(
+    metadados,
+    criarDetalhesResultado(
+      "Ver trecho completo",
+      criarElemento("p", "ementa-completa", limitarTexto(resultado.texto || "", 1_200)),
+    ),
+  );
   cartao.append(conteudo);
 
   const link = criarLinkSeguro(metadata.inteiro_teor_url, "Abrir fonte ↗");
@@ -287,6 +322,7 @@ function renderizarPesquisaAssistida(dados) {
   metricasResposta.replaceChildren();
 
   if (dados.status === "precisa_esclarecimento") {
+    atualizarEtapa("esclarecimentos");
     tituloResultados.textContent = "IA precisa de mais contexto";
     textoResposta.append(
       criarElemento(
@@ -302,6 +338,8 @@ function renderizarPesquisaAssistida(dados) {
     renderizarCustoAssistido(dados);
     return;
   }
+
+  atualizarEtapa("precedentes");
 
   tituloResultados.textContent =
     processos.length === 0 ? "Nenhum candidato encontrado" : "Processos sugeridos pela IA";
@@ -345,11 +383,10 @@ function renderizarPesquisaAssistida(dados) {
   }
 
   estado.consultaTJSP = dados.consulta_id;
-  estado.selecionados = new Set(
-    processos
-      .slice(0, Math.min(3, estado.maxImportacao))
-      .map((processo) => String(processo.cd_acordao)),
-  );
+  estado.recomendados = processos
+    .slice(0, Math.min(3, estado.maxImportacao))
+    .map((processo) => String(processo.cd_acordao));
+  estado.selecionados = new Set(estado.recomendados);
   processos.forEach((processo, indice) => {
     listaResultados.append(criarCartaoAssistido(processo, indice + 1));
   });
@@ -464,6 +501,7 @@ function criarCartaoAssistido(decisao, numero) {
 
   const conteudo = criarElemento("div");
   const relevancia = Math.round(Number(decisao.relevancia || 0) * 100);
+  const ementa = decisao.ementa || "Ementa não informada.";
   conteudo.append(
     criarElemento(
       "h3",
@@ -473,7 +511,7 @@ function criarCartaoAssistido(decisao, numero) {
         : `Acórdão ${decisao.cd_acordao}`,
     ),
     criarElemento("span", "selo-relevancia", `${relevancia}% de aderência`),
-    criarElemento("p", "ementa-assistida", limitarTexto(decisao.ementa || "", 700)),
+    criarElemento("p", "ementa-resumo", limitarTexto(ementa, 280)),
   );
   const analise = criarElemento("div", "analise-processo");
   [
@@ -486,12 +524,18 @@ function criarCartaoAssistido(decisao, numero) {
     bloco.append(criarElemento("strong", "", `${rotulo}: `), document.createTextNode(texto));
     analise.append(bloco);
   });
-  conteudo.append(analise);
   const metadados = criarElemento("div", "metadados-resultado");
   [decisao.classe, decisao.assunto, decisao.orgao_julgador, decisao.data_julgamento]
     .filter(Boolean)
     .forEach((item) => metadados.append(criarElemento("span", "", item)));
-  conteudo.append(metadados);
+  conteudo.append(
+    metadados,
+    criarDetalhesResultado(
+      "Ver ementa e análise",
+      criarElemento("p", "ementa-completa", limitarTexto(ementa, 1_400)),
+      analise,
+    ),
+  );
   cartao.append(conteudo);
 
   const link = criarLinkSeguro(decisao.inteiro_teor_url, "Ver no TJSP ↗");
@@ -504,12 +548,12 @@ function criarCartaoAssistido(decisao, numero) {
 
 function renderizarPesquisaTJSP(dados) {
   const decisoes = Array.isArray(dados.decisoes) ? dados.decisoes : [];
+  atualizarEtapa("precedentes");
   estado.consultaTJSP = dados.consulta_id;
-  estado.selecionados = new Set(
-    decisoes
-      .slice(0, Math.min(3, estado.maxImportacao))
-      .map((decisao) => String(decisao.cd_acordao)),
-  );
+  estado.recomendados = decisoes
+    .slice(0, Math.min(3, estado.maxImportacao))
+    .map((decisao) => String(decisao.cd_acordao));
+  estado.selecionados = new Set(estado.recomendados);
   tituloResultados.textContent =
     decisoes.length === 0 ? "Nenhuma decisão encontrada no TJSP" : "Resultados no TJSP";
   contadorResultados.textContent =
@@ -543,6 +587,7 @@ function criarCartaoTJSP(decisao, numero) {
   );
 
   const conteudo = criarElemento("div");
+  const ementa = decisao.ementa || "Ementa não informada.";
   conteudo.append(
     criarElemento(
       "h3",
@@ -551,13 +596,19 @@ function criarCartaoTJSP(decisao, numero) {
         ? `${decisao.processo} · Acórdão ${decisao.cd_acordao}`
         : `Acórdão ${decisao.cd_acordao}`,
     ),
-    criarElemento("p", "", limitarTexto(decisao.ementa || "Ementa não informada.", 620)),
+    criarElemento("p", "ementa-resumo", limitarTexto(ementa, 280)),
   );
   const metadados = criarElemento("div", "metadados-resultado");
   [decisao.classe, decisao.assunto, decisao.orgao_julgador, decisao.data_julgamento]
     .filter(Boolean)
     .forEach((item) => metadados.append(criarElemento("span", "", item)));
-  conteudo.append(metadados);
+  conteudo.append(
+    metadados,
+    criarDetalhesResultado(
+      "Ver ementa completa",
+      criarElemento("p", "ementa-completa", limitarTexto(ementa, 1_400)),
+    ),
+  );
   cartao.append(conteudo);
 
   const link = criarLinkSeguro(decisao.inteiro_teor_url, "Ver no TJSP ↗");
@@ -584,12 +635,34 @@ function alternarSelecao(seletor) {
 function atualizarSelecao() {
   const total = estado.selecionados.size;
   quantidadeSelecionada.textContent =
-    `${total} acórdão${total === 1 ? "" : "s"} selecionado${total === 1 ? "" : "s"}`;
+    `${total} acórdão${total === 1 ? "" : "s"} selecionado${total === 1 ? "" : "s"} de ${estado.maxImportacao}`;
   botaoImportar.disabled = total === 0;
+  botaoLimparSelecao.disabled = total === 0;
+  botaoSelecionarRecomendados.disabled = estado.recomendados.every((id) =>
+    estado.selecionados.has(id),
+  );
+}
+
+function sincronizarSeletores() {
+  document.querySelectorAll(".seletor-acordao").forEach((seletor) => {
+    seletor.checked = estado.selecionados.has(seletor.value);
+  });
+  atualizarSelecao();
+}
+
+function selecionarRecomendados() {
+  estado.selecionados = new Set(estado.recomendados.slice(0, estado.maxImportacao));
+  sincronizarSeletores();
+}
+
+function limparSelecao() {
+  estado.selecionados.clear();
+  sincronizarSeletores();
 }
 
 async function importarSelecionados() {
   if (!estado.consultaTJSP || estado.selecionados.size === 0) return;
+  atualizarEtapa("importacao");
   const acordaosImportados = [...estado.selecionados];
   estadoErro.hidden = true;
   resultadoImportacao.hidden = true;
@@ -609,9 +682,10 @@ async function importarSelecionados() {
     renderizarImportacao(dados, acordaosImportados);
     await verificarSaude();
   } catch (erro) {
-    mensagemErro.textContent =
-      erro instanceof Error ? erro.message : "Erro inesperado durante a importação.";
-    estadoErro.hidden = false;
+    exibirErro(
+      erro instanceof Error ? erro.message : "Erro inesperado durante a importação.",
+      "Importação não concluída",
+    );
   } finally {
     botaoImportar.querySelector("span").textContent = "Importar e indexar";
     botaoImportar.disabled = estado.selecionados.size === 0;
@@ -633,6 +707,7 @@ function renderizarImportacao(dados, cdAcordaos) {
     ),
   );
   if (Number(dados.processados) > 0) {
+    atualizarEtapa("analise");
     const avisoCusto = estado.maxCustoAnaliseDocumentalBrl
       ? `A análise dos inteiros teores faz uma nova chamada Maritaca, limitada pelo servidor a ${formatarReal(estado.maxCustoAnaliseDocumentalBrl)}.`
       : "A análise dos inteiros teores faz uma nova chamada Maritaca, sujeita ao teto configurado no servidor.";
@@ -659,6 +734,7 @@ function renderizarImportacao(dados, cdAcordaos) {
 }
 
 async function analisarDocumentosImportados(cdAcordaos, botao) {
+  atualizarEtapa("analise");
   estadoErro.hidden = true;
   botao.disabled = true;
   botao.querySelector("span").textContent = "Analisando inteiros teores…";
@@ -677,9 +753,10 @@ async function analisarDocumentosImportados(cdAcordaos, botao) {
     renderizarAnaliseDocumental(dados);
     await carregarAuditorias();
   } catch (erro) {
-    mensagemErro.textContent =
-      erro instanceof Error ? erro.message : "Erro durante análise dos documentos.";
-    estadoErro.hidden = false;
+    exibirErro(
+      erro instanceof Error ? erro.message : "Erro durante análise dos documentos.",
+      "Análise não concluída",
+    );
   } finally {
     botao.querySelector("span").textContent = "Analisar PDFs com IA";
     botao.disabled = false;
@@ -687,6 +764,7 @@ async function analisarDocumentosImportados(cdAcordaos, botao) {
 }
 
 function renderizarAnaliseDocumental(dados) {
+  atualizarEtapa("analise", true);
   const validacao = dados.validacao || {};
   tituloResultados.textContent = "Argumentos encontrados nos inteiros teores";
   respostaIA.querySelector("header span").textContent = "Análise documental validada";
@@ -832,10 +910,17 @@ function renderizarAuditorias(auditorias) {
   });
 }
 
-function exibirErro(mensagem) {
-  tituloResultados.textContent = "A consulta não foi concluída";
+function exibirErro(mensagem, titulo = "A consulta não foi concluída") {
+  tituloResultados.textContent = titulo;
   mensagemErro.textContent = mensagem;
   estadoErro.hidden = false;
+  estadoErro.tabIndex = -1;
+  estadoErro.focus();
+}
+
+function focarResultados() {
+  secaoResultados.focus({ preventScroll: true });
+  secaoResultados.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function mensagemDaAPI(dados) {
@@ -858,6 +943,16 @@ function criarElemento(tag, classe = "", texto = "") {
   if (classe) elemento.className = classe;
   if (texto !== "") elemento.textContent = String(texto);
   return elemento;
+}
+
+function criarDetalhesResultado(rotulo, ...conteudos) {
+  const detalhes = criarElemento("details", "detalhes-resultado");
+  const resumo = criarElemento("summary", "", rotulo);
+  detalhes.append(resumo, ...conteudos);
+  detalhes.addEventListener("toggle", () => {
+    resumo.textContent = detalhes.open ? "Ocultar detalhes" : rotulo;
+  });
+  return detalhes;
 }
 
 function criarLinkSeguro(url, texto) {

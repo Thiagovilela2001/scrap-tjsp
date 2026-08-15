@@ -44,6 +44,34 @@
         </p>
       </section>
 
+      <nav class="etapas-pesquisa" aria-label="Etapas da pesquisa">
+        <span class="somente-leitor" id="estado-etapa" aria-live="polite">
+          Etapa 1 de 5: Caso
+        </span>
+        <ol>
+          <li class="ativa" data-etapa="caso" aria-current="step">
+            <span>1</span>
+            <div><strong>Caso</strong><small>Definir questão</small></div>
+          </li>
+          <li data-etapa="esclarecimentos">
+            <span>2</span>
+            <div><strong>Contexto</strong><small>Esclarecer fatos</small></div>
+          </li>
+          <li data-etapa="precedentes">
+            <span>3</span>
+            <div><strong>Precedentes</strong><small>Revisar candidatos</small></div>
+          </li>
+          <li data-etapa="importacao">
+            <span>4</span>
+            <div><strong>Importação</strong><small>Processar PDFs</small></div>
+          </li>
+          <li data-etapa="analise">
+            <span>5</span>
+            <div><strong>Análise</strong><small>Validar argumentos</small></div>
+          </li>
+        </ol>
+      </nav>
+
       <section class="area-pesquisa" aria-label="Ferramenta de pesquisa">
         <form id="formulario-pesquisa" class="formulario-pesquisa">
           <div class="campo-pergunta">
@@ -168,7 +196,12 @@
         </form>
       </section>
 
-      <section class="resultados" id="secao-resultados" aria-labelledby="titulo-resultados">
+      <section
+        class="resultados"
+        id="secao-resultados"
+        aria-labelledby="titulo-resultados"
+        tabindex="-1"
+      >
         <div class="cabecalho-secao">
           <div>
             <p class="sobretitulo">Resultado da consulta</p>
@@ -207,14 +240,22 @@
         <div class="lista-resultados" id="lista-resultados"></div>
 
         <div class="barra-importacao" id="barra-importacao" hidden>
-          <div>
-            <strong id="quantidade-selecionada">0 acórdãos selecionados</strong>
-            <span>O download e o OCR podem levar alguns minutos.</span>
+          <div class="resumo-selecao">
+            <strong id="quantidade-selecionada">0 acórdãos selecionados de 5</strong>
+            <span>Recomendados vêm pré-selecionados. Revise antes de importar.</span>
           </div>
-          <button class="botao-principal" id="botao-importar" type="button">
-            <span>Importar e indexar</span>
-            <b aria-hidden="true">↓</b>
-          </button>
+          <div class="acoes-selecao">
+            <button class="botao-texto" id="selecionar-recomendados" type="button">
+              Selecionar recomendados
+            </button>
+            <button class="botao-texto" id="limpar-selecao" type="button">
+              Limpar
+            </button>
+            <button class="botao-principal" id="botao-importar" type="button">
+              <span>Importar e indexar</span>
+              <b aria-hidden="true">↓</b>
+            </button>
+          </div>
         </div>
 
         <article class="resultado-importacao" id="resultado-importacao" hidden></article>
