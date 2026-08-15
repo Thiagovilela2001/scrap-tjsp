@@ -166,7 +166,9 @@ Inicie o serviço somente na máquina local:
 tjsp-api
 ```
 
-A documentação interativa fica em `http://127.0.0.1:8000/docs`. O endereço padrão não expõe o serviço para a rede.
+A interface web fica em `http://127.0.0.1:8000/` e apresenta somente o fluxo principal de pesquisa assistida por IA. A documentação interativa, com os endpoints auxiliares, fica em `http://127.0.0.1:8000/docs`. O endereço padrão não expõe o serviço para a rede.
+
+Antes da primeira pesquisa, prepare a base padrão com `tjsp-preparar-dataset evals/casos.jsonl`. Para reutilizar outra base já processada, configure `TJSP_SQLITE_PATH` e `TJSP_CHROMA_PATH` no `.env`; a interface informa quando a base selecionada não possui trechos indexados.
 
 Busca híbrida sem chamada de IA:
 
@@ -206,10 +208,21 @@ Endpoints disponíveis:
 - `GET /saude`: configuração pública e estado do serviço;
 - `POST /buscar`: recuperação híbrida local, sem cobrança;
 - `POST /perguntar`: RAG com Maritaca, fontes, tokens e custo estimado;
+- `POST /tjsp/pesquisar`: consulta controlada no CJSG, sem chamada de IA;
+- `POST /tjsp/pesquisa-assistida`: Maritaca planeja até três consultas, o coletor busca no CJSG e a Maritaca ranqueia as ementas;
+- `POST /tjsp/importar`: baixa, processa e indexa acórdãos selecionados;
+- `POST /tjsp/analisar-documentos`: recupera trechos dos PDFs selecionados, gera argumentos com páginas e valida referências jurídicas;
+- `GET /documentos/{cd_acordao}`: abre o PDF local auditado pelo código do acórdão;
 - `GET /auditorias`: últimas chamadas registradas;
 - `GET /auditorias/{id}`: detalhes, fontes e resultado de uma chamada.
 
 O servidor limita cada requisição a `TJSP_API_MAX_CUSTO_BRL=0.10` e `TJSP_API_MAX_OUTPUT_TOKENS=2000`. O cliente pode pedir limites menores, nunca maiores. A estimativa conservadora é calculada antes da chamada; ausência de fontes, chave Maritaca ou orçamento suficiente impede a chamada paga. Caminhos podem ser alterados por `TJSP_SQLITE_PATH` e `TJSP_CHROMA_PATH` no `.env`.
+
+A área “Buscar no TJSP” consulta no máximo `TJSP_API_MAX_PAGINAS_TJSP=1` página por pesquisa e importa até `TJSP_API_MAX_IMPORTACAO_PDFS=5` PDFs por operação. O intervalo padrão entre requisições externas é de 2 segundos. O processamento usa OCR quando necessário; nenhuma resposta de IA é gerada durante coleta ou indexação.
+
+A área “Pesquisa com IA” recebe a questão jurídica e o contexto factual. A Maritaca primeiro cria consultas estruturadas; o scraper executa cada consulta no TJSP; depois a Maritaca ranqueia somente os processos encontrados e explica possível uso, aderência fática e ressalvas. Se faltarem fatos, ela pede esclarecimentos antes de consultar o portal. O teto total padrão das duas chamadas é `TJSP_API_MAX_CUSTO_PESQUISA_BRL=0.20`. PDFs não são baixados automaticamente: o usuário revisa os candidatos e seleciona quais serão importados.
+
+Após a importação, a interface oferece “Analisar PDFs com IA”. Essa ação explícita faz uma nova chamada Maritaca, limitada por `TJSP_API_MAX_CUSTO_ANALISE_BRL=0.20`. A recuperação híbrida é restrita aos acórdãos selecionados, diversifica páginas e devolve arquivo, processo, acórdão, página e link local. Um validador determinístico confere citações `[Fonte N]`, números de processo, acórdãos, temas, súmulas, artigos, páginas, datas, percentuais e valores contra os trechos recuperados.
 
 O serviço não possui autenticação de usuário. Mantenha o `host` padrão `127.0.0.1`; não use `--host 0.0.0.0` em ambiente acessível por terceiros sem adicionar autenticação e proteção de tráfego.
 

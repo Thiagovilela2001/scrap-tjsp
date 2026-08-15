@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["httpx2>=2.9,<3", "pytest>=8,<9", "ruff>=0.12,<1"]
+dev = ["httpx>=0.28,<1", "pytest>=8,<9", "ruff>=0.12,<1"]
 
 [project.scripts]
 tjsp-jurisprudencia = "scraping_tjsp.cli:main"
@@ -34,7 +34,7 @@ tjsp-api = "scraping_tjsp.api_cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-scraping_tjsp = ["schema_sqlite.sql"]
+scraping_tjsp = ["schema_sqlite.sql", "web/*.css", "web/*.html", "web/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

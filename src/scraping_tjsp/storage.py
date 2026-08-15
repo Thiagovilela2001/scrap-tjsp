@@ -64,6 +64,72 @@ class RepositorioSQLite:
                 )
         return consulta_id
 
+    def listar_decisoes_consulta(self, consulta_id: int) -> tuple[Decisao, ...]:
+        if consulta_id < 1:
+            raise ValueError("consulta_id deve ser positivo.")
+        with self._conectar() as conexao:
+            consulta = conexao.execute(
+                "SELECT 1 FROM consultas_jurisprudencia WHERE id = ?",
+                (consulta_id,),
+            ).fetchone()
+            if consulta is None:
+                raise LookupError(f"Consulta {consulta_id} não encontrada.")
+            linhas = conexao.execute(
+                """
+                SELECT d.*
+                FROM consulta_decisoes cd
+                JOIN decisoes d ON d.id = cd.decisao_id
+                WHERE cd.consulta_id = ?
+                ORDER BY cd.posicao
+                """,
+                (consulta_id,),
+            ).fetchall()
+        return tuple(
+            Decisao(
+                processo=linha["processo"],
+                cd_acordao=linha["cd_acordao"],
+                cd_foro=linha["cd_foro"],
+                classe=linha["classe"] or "",
+                assunto=linha["assunto"] or "",
+                relator=linha["relator"] or "",
+                comarca=linha["comarca"] or "",
+                orgao_julgador=linha["orgao_julgador"] or "",
+                data_julgamento=_data_br(linha["data_julgamento"]),
+                data_publicacao=_data_br(linha["data_publicacao"]),
+                ementa=linha["ementa"] or "",
+                inteiro_teor_url=linha["inteiro_teor_url"],
+                ocorrencias=linha["ocorrencias"],
+            )
+            for linha in linhas
+        )
+
+    def obter_documento(self, cd_acordao: str) -> dict:
+        cd_acordao = cd_acordao.strip()
+        if not cd_acordao.isdigit():
+            raise ValueError("Código de acórdão deve ser numérico.")
+        with self._conectar() as conexao:
+            linha = conexao.execute(
+                """
+                SELECT
+                    documentos.id,
+                    documentos.caminho_local,
+                    documentos.mime_type,
+                    documentos.tamanho_bytes,
+                    documentos.sha256,
+                    documentos.status,
+                    documentos.url_origem,
+                    decisoes.cd_acordao,
+                    decisoes.processo
+                FROM documentos
+                JOIN decisoes ON decisoes.id = documentos.decisao_id
+                WHERE decisoes.cd_acordao = ?
+                """,
+                (cd_acordao,),
+            ).fetchone()
+        if linha is None:
+            raise LookupError(f"PDF do acórdão {cd_acordao} não encontrado.")
+        return dict(linha)
+
     def registrar_documento(self, documento: DocumentoBaixado) -> None:
         with self._conectar() as conexao:
             decisao_id = self._id_decisao(conexao, documento.cd_acordao)
@@ -486,6 +552,8 @@ class RepositorioSQLite:
                 decisoes.data_julgamento,
                 decisoes.data_publicacao,
                 decisoes.inteiro_teor_url,
+                documentos.caminho_local,
+                documentos.sha256,
                 bm25(chunks_fts) AS score_bm25
             FROM chunks_fts
             JOIN chunks_documento AS chunks ON chunks.rowid = chunks_fts.rowid
@@ -508,6 +576,8 @@ class RepositorioSQLite:
                 "pagina": linha["pagina"],
                 "indice_chunk": linha["indice"],
                 "inteiro_teor_url": linha["inteiro_teor_url"],
+                "arquivo": Path(linha["caminho_local"]).name,
+                "sha256": linha["sha256"],
                 "tipo_registro": "inteiro_teor",
                 "citacao": (
                     f"Processo {linha['processo']}, acórdão "
@@ -647,6 +717,12 @@ def _data_iso(valor: str) -> str | None:
     except ValueError as exc:
         raise ValueError(f"Data devolvida pelo TJSP é inválida: {valor!r}.") from exc
     return data.isoformat()
+
+
+def _data_br(valor: str | None) -> str:
+    if not valor:
+        return ""
+    return datetime.strptime(valor, "%Y-%m-%d").strftime("%d/%m/%Y")
 
 
 def _consulta_fts(texto: str) -> str:

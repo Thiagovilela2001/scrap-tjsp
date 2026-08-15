@@ -196,6 +196,7 @@ def _metadata_chunk(
             "pagina": chunk.pagina,
             "indice_chunk": chunk.indice,
             "sha256": resultado.sha256,
+            "arquivo": Path(resultado.caminho_local).name,
             "citacao": (
                 f"Processo {decisao.processo}, ac\u00f3rd\u00e3o "
                 f"{decisao.cd_acordao}, p. {chunk.pagina}"

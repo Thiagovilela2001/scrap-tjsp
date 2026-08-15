@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Pesquisa jurisprudencial local em decisões públicas do TJSP."
+    />
+    <title>Juris TJSP — Pesquisa jurisprudencial</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <a class="atalho" href="#conteudo">Ir para o conteúdo</a>
+
+    <header class="barra-superior">
+      <a class="marca" href="/" aria-label="Juris TJSP — início">
+        <span class="marca-selo" aria-hidden="true">TJ</span>
+        <span>
+          <strong>Juris TJSP</strong>
+          <small>Pesquisa jurisprudencial com IA</small>
+        </span>
+      </a>
+
+      <div class="barra-acoes">
+        <span class="estado-api" id="estado-api" role="status">
+          <i aria-hidden="true"></i>
+          Verificando API
+        </span>
+        <a class="link-discreto" href="/docs" target="_blank" rel="noreferrer">
+          Documentação da API
+        </a>
+      </div>
+    </header>
+
+    <main id="conteudo">
+      <section class="apresentacao" aria-labelledby="titulo-principal">
+        <p class="sobretitulo">Pesquisa jurídica assistida por IA</p>
+        <h1 id="titulo-principal">Descreva seu caso.<br />Encontre precedentes.</h1>
+        <p class="resumo">
+          A Maritaca entende o contexto, formula consultas e pesquisa jurisprudência
+          em tempo real no TJSP. Você revisa e escolhe os processos relevantes.
+        </p>
+      </section>
+
+      <section class="area-pesquisa" aria-label="Ferramenta de pesquisa">
+        <form id="formulario-pesquisa" class="formulario-pesquisa">
+          <div class="campo-pergunta">
+            <label for="pergunta">Sua pesquisa</label>
+            <textarea
+              id="pergunta"
+              name="pergunta"
+              rows="3"
+              maxlength="2000"
+              required
+              placeholder="Ex.: Preciso de jurisprudência favorável à repetição de ICMS cobrado sobre energia não consumida"
+            ></textarea>
+            <div class="atalhos-consulta" aria-label="Exemplos de consulta">
+              <span>Experimente:</span>
+              <button type="button" data-consulta="prescrição intercorrente">
+                prescrição intercorrente
+              </button>
+              <button type="button" data-consulta="danos morais in re ipsa">
+                danos morais
+              </button>
+              <button type="button" data-consulta="vícios construtivos">
+                vícios construtivos
+              </button>
+            </div>
+          </div>
+
+          <input name="contexto_caso" type="hidden" value="" />
+
+          <details class="painel-filtros" hidden>
+            <summary>
+              <span>Filtros e limites</span>
+              <small>Opcional</small>
+            </summary>
+            <div class="grade-filtros" id="filtros-locais">
+              <label>
+                Processo
+                <input name="processo" type="text" placeholder="0000000-00.0000.8.26.0000" />
+              </label>
+              <label>
+                Código do acórdão
+                <input name="cd_acordao" type="text" inputmode="numeric" placeholder="20841962" />
+              </label>
+              <label>
+                Assunto
+                <input name="assunto" type="text" placeholder="Dano moral" />
+              </label>
+              <label>
+                Órgão julgador
+                <input name="orgao_julgador" type="text" placeholder="27ª Câmara" />
+              </label>
+              <label>
+                Classe
+                <input name="classe" type="text" placeholder="Apelação Cível" />
+              </label>
+              <label>
+                Página
+                <input name="pagina" type="number" min="1" placeholder="1" />
+              </label>
+            </div>
+
+            <div class="grade-filtros filtros-tjsp" id="filtros-tjsp" hidden>
+              <label>
+                Julgamento inicial
+                <input name="inicio_tjsp" type="date" />
+              </label>
+              <label>
+                Julgamento final
+                <input name="fim_tjsp" type="date" />
+              </label>
+              <label>
+                Tipo de decisão
+                <select name="tipo_tjsp">
+                  <option value="acordao">Acórdão</option>
+                  <option value="monocratica">Decisão monocrática</option>
+                  <option value="homologacao">Homologação</option>
+                </select>
+              </label>
+              <label>
+                Origem
+                <select name="origem_tjsp">
+                  <option value="segundo_grau">Segundo grau</option>
+                  <option value="colegio_recursal">Colégio recursal</option>
+                </select>
+              </label>
+              <label>
+                Máximo de páginas
+                <input name="paginas_tjsp" type="number" min="1" max="1" value="1" />
+              </label>
+              <label class="campo-checkbox">
+                <input name="sinonimos_tjsp" type="checkbox" checked />
+                Pesquisar também com sinônimos
+              </label>
+            </div>
+
+            <div class="grade-limites" id="limites-locais">
+              <label>
+                Número de fontes
+                <input id="limite-fontes" name="limite" type="number" min="1" max="20" value="6" />
+              </label>
+              <div class="limites-ia" id="limites-ia" hidden>
+                <label>
+                  Máximo de tokens
+                  <input name="max_output_tokens" type="number" min="1" max="2000" value="800" />
+                </label>
+                <label>
+                  Teto de custo (R$)
+                  <input name="max_custo_brl" type="number" min="0.001" max="0.10" step="0.001" value="0.10" />
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <div class="rodape-formulario">
+            <p id="aviso-modo">
+              Maritaca planeja a pesquisa; scraper consulta o TJSP em tempo real.
+            </p>
+            <button class="botao-principal" id="botao-enviar" type="submit">
+              <span>Iniciar pesquisa com IA</span>
+              <b aria-hidden="true">→</b>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="resultados" id="secao-resultados" aria-labelledby="titulo-resultados">
+        <div class="cabecalho-secao">
+          <div>
+            <p class="sobretitulo">Resultado da consulta</p>
+            <h2 id="titulo-resultados">Pronto para pesquisar</h2>
+          </div>
+          <span class="contador" id="contador-resultados" hidden></span>
+        </div>
+
+        <div class="estado-vazio" id="estado-vazio">
+          <span aria-hidden="true">§</span>
+          <p>Digite uma questão jurídica para encontrar decisões e fundamentos.</p>
+        </div>
+
+        <div class="estado-carregando" id="estado-carregando" hidden role="status">
+          <i aria-hidden="true"></i>
+          <div>
+            <strong>Consultando a base local</strong>
+            <span>Combinando busca lexical e semântica…</span>
+          </div>
+        </div>
+
+        <div class="estado-erro" id="estado-erro" hidden role="alert">
+          <strong>Não foi possível concluir</strong>
+          <p id="mensagem-erro"></p>
+        </div>
+
+        <article class="resposta-ia" id="resposta-ia" hidden>
+          <header>
+            <span>Resposta fundamentada</span>
+            <small>Maritaca AI</small>
+          </header>
+          <div class="texto-resposta" id="texto-resposta"></div>
+          <dl class="metricas-resposta" id="metricas-resposta"></dl>
+        </article>
+
+        <div class="lista-resultados" id="lista-resultados"></div>
+
+        <div class="barra-importacao" id="barra-importacao" hidden>
+          <div>
+            <strong id="quantidade-selecionada">0 acórdãos selecionados</strong>
+            <span>O download e o OCR podem levar alguns minutos.</span>
+          </div>
+          <button class="botao-principal" id="botao-importar" type="button">
+            <span>Importar e indexar</span>
+            <b aria-hidden="true">↓</b>
+          </button>
+        </div>
+
+        <article class="resultado-importacao" id="resultado-importacao" hidden></article>
+
+        <section class="fontes-resposta" id="fontes-resposta" hidden aria-labelledby="titulo-fontes">
+          <div class="cabecalho-menor">
+            <h3 id="titulo-fontes">Fontes consultadas</h3>
+            <span id="quantidade-fontes"></span>
+          </div>
+          <div class="grade-fontes" id="grade-fontes"></div>
+        </section>
+      </section>
+
+      <section class="auditorias" aria-labelledby="titulo-auditorias">
+        <div class="cabecalho-secao">
+          <div>
+            <p class="sobretitulo">Transparência</p>
+            <h2 id="titulo-auditorias">Chamadas recentes</h2>
+          </div>
+          <button class="botao-texto" id="atualizar-auditorias" type="button">
+            Atualizar
+          </button>
+        </div>
+        <div class="lista-auditorias" id="lista-auditorias">
+          <p class="texto-suave">Carregando histórico local…</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Dados públicos do TJSP · Revise sempre o inteiro teor.</p>
+      <p>Captura controlada · Fontes oficiais</p>
+    </footer>
+  </body>
+</html>

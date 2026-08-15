@@ -51,6 +51,8 @@ def test_persistencia_sqlite_real_e_idempotente(tmp_path: Path):
             "SELECT data_julgamento FROM decisoes WHERE cd_acordao = '123'"
         ).fetchone()[0]
     assert data == "2026-08-01"
+    decisoes = repositorio.listar_decisoes_consulta(primeiro_id)
+    assert decisoes == (_decisao(),)
 
 
 def test_registra_documento_no_sqlite(tmp_path: Path):
@@ -71,6 +73,9 @@ def test_registra_documento_no_sqlite(tmp_path: Path):
     )
 
     assert repositorio.contagens()["documentos"] == 1
+    documento = repositorio.obter_documento("123")
+    assert documento["processo"] == "1000123-45.2023.8.26.0100"
+    assert documento["caminho_local"] == "data/pdfs/123.pdf"
 
 
 def test_persiste_paginas_chunks_e_reprocessamento(tmp_path: Path):

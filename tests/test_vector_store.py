@@ -102,4 +102,5 @@ def test_indexa_chunks_com_citacao_verificavel(tmp_path: Path):
     lote = cliente.colecao.lotes[0]
     assert lote["ids"] == ["acordao:123:pagina:1:chunk:1"]
     assert lote["metadatas"][0]["pagina"] == 1
+    assert lote["metadatas"][0]["arquivo"] == "123.pdf"
     assert lote["metadatas"][0]["citacao"].endswith("p. 1")
