@@ -5,6 +5,7 @@ const estado = {
   consultaTJSP: null,
   selecionados: new Set(),
   maxImportacao: 5,
+  maxCustoAnaliseDocumentalBrl: null,
   perguntaContexto: null,
 };
 const formulario = document.querySelector("#formulario-pesquisa");
@@ -36,10 +37,6 @@ const botaoImportar = document.querySelector("#botao-importar");
 const quantidadeSelecionada = document.querySelector("#quantidade-selecionada");
 const resultadoImportacao = document.querySelector("#resultado-importacao");
 
-document.querySelectorAll("[data-modo]").forEach((botao) => {
-  botao.addEventListener("click", () => alterarModo(botao.dataset.modo));
-});
-
 document.querySelectorAll("[data-consulta]").forEach((botao) => {
   botao.addEventListener("click", () => {
     pergunta.value = botao.dataset.consulta;
@@ -57,11 +54,6 @@ carregarAuditorias();
 
 function alterarModo(modo) {
   estado.modo = ["busca", "ia", "tjsp", "assistida"].includes(modo) ? modo : "busca";
-  document.querySelectorAll("[data-modo]").forEach((botao) => {
-    const ativo = botao.dataset.modo === estado.modo;
-    botao.classList.toggle("ativo", ativo);
-    botao.setAttribute("aria-selected", String(ativo));
-  });
   const coletaTJSP = estado.modo === "tjsp";
   const pesquisaAssistida = estado.modo === "assistida";
   filtrosLocais.hidden = coletaTJSP;
@@ -104,6 +96,9 @@ async function verificarSaude() {
       campoTokens.value = String(dados.max_output_tokens);
     }
     estado.maxImportacao = Number(dados.max_importacao_pdfs) || 5;
+    const maxCustoAnalise = Number(dados.max_custo_analise_documental_brl);
+    estado.maxCustoAnaliseDocumentalBrl =
+      Number.isFinite(maxCustoAnalise) && maxCustoAnalise > 0 ? maxCustoAnalise : null;
     formulario.elements.paginas_tjsp.max = String(dados.max_paginas_tjsp || 1);
     elemento.classList.add("online");
     elemento.classList.remove("sem-dados");
@@ -638,11 +633,14 @@ function renderizarImportacao(dados, cdAcordaos) {
     ),
   );
   if (Number(dados.processados) > 0) {
+    const avisoCusto = estado.maxCustoAnaliseDocumentalBrl
+      ? `A análise dos inteiros teores faz uma nova chamada Maritaca, limitada pelo servidor a ${formatarReal(estado.maxCustoAnaliseDocumentalBrl)}.`
+      : "A análise dos inteiros teores faz uma nova chamada Maritaca, sujeita ao teto configurado no servidor.";
     resultadoImportacao.append(
       criarElemento(
         "p",
         "aviso-custo-analise",
-        "A análise dos inteiros teores faz uma nova chamada Maritaca, limitada pelo servidor a R$ 0,20.",
+        avisoCusto,
       ),
     );
     const botaoAnalisar = criarElemento("button", "botao-principal botao-analisar");

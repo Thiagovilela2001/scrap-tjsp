@@ -241,6 +241,9 @@ def test_raiz_entrega_interface_e_assets(tmp_path: Path):
     assert script.status_code == 200
     assert 'fetch("/saude")' in script.text
     assert "criarEntrevistaEsclarecimentos" in script.text
+    assert "[data-modo]" not in script.text
+    assert "limitada pelo servidor a R$ 0,20" not in script.text
+    assert "max_custo_analise_documental_brl" in script.text
     assert "innerHTML" not in script.text
 
 
