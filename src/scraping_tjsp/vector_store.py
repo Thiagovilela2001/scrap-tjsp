@@ -7,6 +7,8 @@ import chromadb
 
 from .models import ChunkJuridico, Decisao, ResultadoProcessamento
 
+MODELO_EMBEDDING_PADRAO = "all-MiniLM-L6-v2"
+
 
 class RepositorioChroma:
     NOME_COLECAO = "ementas_tjsp"
@@ -16,13 +18,19 @@ class RepositorioChroma:
         caminho: Path | str = Path("data/chroma"),
         *,
         cliente=None,
+        modelo_embedding: str = MODELO_EMBEDDING_PADRAO,
+        embedding_function=None,
     ) -> None:
         self.caminho = Path(caminho)
         self.caminho.mkdir(parents=True, exist_ok=True)
+        self.modelo_embedding = modelo_embedding
         self.cliente = cliente or chromadb.PersistentClient(path=str(self.caminho))
-        self.colecao = self.cliente.get_or_create_collection(
-            name=self.NOME_COLECAO,
-            metadata={
+        self.colecao = _obter_colecao(
+            self.cliente,
+            self.NOME_COLECAO,
+            modelo_embedding,
+            embedding_function,
+            {
                 "descricao": "Ementas públicas coletadas no TJSP/CJSG",
                 "hnsw:space": "cosine",
             },
@@ -88,13 +96,19 @@ class RepositorioChunksChroma:
         caminho: Path | str = Path("data/chroma"),
         *,
         cliente=None,
+        modelo_embedding: str = MODELO_EMBEDDING_PADRAO,
+        embedding_function=None,
     ) -> None:
         self.caminho = Path(caminho)
         self.caminho.mkdir(parents=True, exist_ok=True)
+        self.modelo_embedding = modelo_embedding
         self.cliente = cliente or chromadb.PersistentClient(path=str(self.caminho))
-        self.colecao = self.cliente.get_or_create_collection(
-            name=self.NOME_COLECAO,
-            metadata={
+        self.colecao = _obter_colecao(
+            self.cliente,
+            self.NOME_COLECAO,
+            modelo_embedding,
+            embedding_function,
+            {
                 "descricao": "Trechos por p\u00e1gina dos inteiros teores do TJSP/CJSG",
                 "hnsw:space": "cosine",
             },
@@ -155,6 +169,54 @@ class RepositorioChunksChroma:
                 strict=True,
             )
         ]
+
+
+def criar_funcao_embedding(modelo: str):
+    modelo = modelo.strip()
+    if not modelo or modelo == MODELO_EMBEDDING_PADRAO:
+        return None
+    try:
+        from chromadb.utils.embedding_functions import (
+            SentenceTransformerEmbeddingFunction,
+        )
+
+        return SentenceTransformerEmbeddingFunction(
+            model_name=modelo,
+            device="cpu",
+            normalize_embeddings=True,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "Modelo de embedding alternativo exige o extra 'embeddings'. "
+            'Instale com: python -m pip install -e ".[embeddings]"'
+        ) from exc
+
+
+def _obter_colecao(
+    cliente,
+    nome: str,
+    modelo_embedding: str,
+    embedding_function,
+    metadata: dict,
+):
+    funcao = embedding_function
+    if funcao is None:
+        funcao = criar_funcao_embedding(modelo_embedding)
+    metadata = {**metadata, "modelo_embedding": modelo_embedding}
+    argumentos = {"name": nome, "metadata": metadata}
+    if funcao is not None:
+        argumentos["embedding_function"] = funcao
+    colecao = cliente.get_or_create_collection(**argumentos)
+    metadata_existente = getattr(colecao, "metadata", None) or {}
+    modelo_existente = metadata_existente.get(
+        "modelo_embedding", MODELO_EMBEDDING_PADRAO
+    )
+    if modelo_existente != modelo_embedding:
+        raise ValueError(
+            f"Coleção {nome!r} usa embedding {modelo_existente!r}, não "
+            f"{modelo_embedding!r}. Use outro --chroma-path."
+        )
+    return colecao
 
 
 def _metadata(decisao: Decisao) -> dict[str, str | int | bool]:

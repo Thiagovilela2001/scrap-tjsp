@@ -38,8 +38,11 @@ tjsp-avaliar evals/casos.jsonl `
   --max-custo-brl 0.40
 ```
 
-Esse comando pode gerar cobrança por cinco chamadas, mas aborta antes da primeira se a estimativa conservadora superar R$ 0,40. O relatório registra preços, teto, tokens e custo padrão estimado. Não combine o teto com `--juiz-ia`.
+Esse comando pode gerar cobrança por cinco chamadas, mas aborta antes da primeira se a estimativa conservadora superar R$ 0,40. O relatório registra preços, teto, tokens e custo padrão estimado. O teto também pode ser usado com `--juiz-ia`; nesse caso, a estimativa cobre as duas chamadas por caso.
 
 O arquivo `casos.example.jsonl` permanece como exemplo mínimo de formato.
 
 Em `termos_esperados`, use `|` para alternativas lexicalmente equivalentes, por exemplo `prova técnica|prova pericial`. Uma alternativa encontrada satisfaz o termo.
+
+Comparação reproduzível de `all-MiniLM-L6-v2` e `BAAI/bge-m3`, incluindo caminhos
+separados e relatório de deltas, está documentada no README principal.

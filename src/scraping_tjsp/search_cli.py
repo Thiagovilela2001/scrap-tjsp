@@ -11,7 +11,7 @@ from .maritaca import ErroMaritaca, ProvedorMaritaca
 from .rag import PreparadorContextoIA
 from .search import BuscaHibrida
 from .storage import RepositorioSQLite
-from .vector_store import RepositorioChunksChroma
+from .vector_store import MODELO_EMBEDDING_PADRAO, RepositorioChunksChroma
 
 
 def construir_parser() -> argparse.ArgumentParser:
@@ -23,6 +23,7 @@ def construir_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limite", type=int, default=10)
     parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
     parser.add_argument("--chroma-path", type=Path, default=Path("data/chroma"))
+    parser.add_argument("--embedding-model", default=MODELO_EMBEDDING_PADRAO)
     parser.add_argument("--cd-acordao", default="")
     parser.add_argument("--processo", default="")
     parser.add_argument("--classe", default="")
@@ -56,7 +57,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv()
     sqlite = RepositorioSQLite(args.sqlite_path)
     sqlite.inicializar()
-    busca = BuscaHibrida(sqlite, RepositorioChunksChroma(args.chroma_path))
+    busca = BuscaHibrida(
+        sqlite,
+        RepositorioChunksChroma(
+            args.chroma_path,
+            modelo_embedding=args.embedding_model,
+        ),
+    )
     filtros = _filtros(args)
 
     if args.contexto_ia or args.responder:

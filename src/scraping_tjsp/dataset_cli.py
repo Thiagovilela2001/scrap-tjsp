@@ -10,7 +10,7 @@ from .downloader import PDFDownloader
 from .evaluation_cli import main as avaliar
 from .processor import ProcessadorPDF
 from .storage import RepositorioSQLite
-from .vector_store import RepositorioChunksChroma
+from .vector_store import MODELO_EMBEDDING_PADRAO, RepositorioChunksChroma
 
 
 def construir_parser() -> argparse.ArgumentParser:
@@ -23,6 +23,7 @@ def construir_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-fontes", type=int, default=None)
     parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
     parser.add_argument("--chroma-path", type=Path, default=Path("data/chroma"))
+    parser.add_argument("--embedding-model", default=MODELO_EMBEDDING_PADRAO)
     parser.add_argument("--diretorio-pdfs", type=Path, default=Path("data/pdfs"))
     parser.add_argument("--max-mb-pdf", type=int, default=50)
     parser.add_argument("--sem-ocr", action="store_true")
@@ -70,7 +71,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             sobreposicao=args.sobreposicao_chunk,
             habilitar_ocr=not args.sem_ocr,
         ),
-        RepositorioChunksChroma(args.chroma_path),
+        RepositorioChunksChroma(
+            args.chroma_path,
+            modelo_embedding=args.embedding_model,
+        ),
     ).preparar(
         fontes,
         nome_dataset=args.dataset.name,
@@ -97,6 +101,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             str(args.chroma_path),
             "--saida",
             str(args.saida_avaliacao),
+            "--embedding-model",
+            args.embedding_model,
         ]
     )
 

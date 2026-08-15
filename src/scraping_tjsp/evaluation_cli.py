@@ -13,7 +13,7 @@ from .maritaca import ErroMaritaca, ProvedorMaritaca
 from .rag import PacoteContextoIA, PreparadorContextoIA, RespostaIA
 from .search import BuscaHibrida
 from .storage import RepositorioSQLite
-from .vector_store import RepositorioChunksChroma
+from .vector_store import MODELO_EMBEDDING_PADRAO, RepositorioChunksChroma
 
 
 def construir_parser() -> argparse.ArgumentParser:
@@ -32,6 +32,7 @@ def construir_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-caracteres", type=int, default=12_000)
     parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
     parser.add_argument("--chroma-path", type=Path, default=Path("data/chroma"))
+    parser.add_argument("--embedding-model", default=MODELO_EMBEDDING_PADRAO)
     parser.add_argument("--saida", type=Path, default=Path("output/avaliacao.json"))
     parser.add_argument(
         "--gerar-respostas",
@@ -51,6 +52,11 @@ def construir_parser() -> argparse.ArgumentParser:
         default=None,
         help="Teto conservador antes das chamadas; requer --gerar-respostas.",
     )
+    parser.add_argument(
+        "--somente-estimar-custo",
+        action="store_true",
+        help="Calcula custo máximo e encerra sem chamar o provedor.",
+    )
     parser.add_argument("--preco-entrada-milhao", type=float, default=5.0)
     parser.add_argument("--preco-saida-milhao", type=float, default=20.0)
     return parser
@@ -69,8 +75,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--max-custo-brl deve ser positivo.")
     if args.max_custo_brl is not None and not args.gerar_respostas:
         parser.error("--max-custo-brl exige --gerar-respostas.")
-    if args.max_custo_brl is not None and args.juiz_ia:
-        parser.error("--max-custo-brl ainda não suporta --juiz-ia.")
+    if args.somente_estimar_custo and not args.gerar_respostas:
+        parser.error("--somente-estimar-custo exige --gerar-respostas.")
     try:
         precos = PrecosTokens(
             entrada_milhao=args.preco_entrada_milhao,
@@ -85,7 +91,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     sqlite = RepositorioSQLite(args.sqlite_path)
     sqlite.inicializar()
     preparador = PreparadorContextoIA(
-        BuscaHibrida(sqlite, RepositorioChunksChroma(args.chroma_path))
+        BuscaHibrida(
+            sqlite,
+            RepositorioChunksChroma(
+                args.chroma_path,
+                modelo_embedding=args.embedding_model,
+            ),
+        )
     )
     avaliador = AvaliadorJuridico()
     juiz = JuizJuridicoIA()
@@ -102,12 +114,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         for caso in casos
     ]
     estimativa_maxima = None
-    if args.gerar_respostas and not args.juiz_ia:
-        estimativa_maxima = estimar_custo_maximo(
-            [pacote for _, pacote in casos_pacotes],
+    if args.gerar_respostas:
+        estimativa_maxima = _estimar_custo_pre_execucao(
+            casos_pacotes,
+            juiz=juiz,
+            incluir_juiz=args.juiz_ia,
             max_output_tokens=args.max_output_tokens,
             precos=precos,
         )
+        if args.somente_estimar_custo:
+            print(
+                json.dumps(
+                    {
+                        "estimativa_maxima_brl": round(estimativa_maxima, 6),
+                        "limite_brl": args.max_custo_brl,
+                        "dentro_do_limite": (
+                            args.max_custo_brl is None
+                            or estimativa_maxima <= args.max_custo_brl
+                        ),
+                        "total_casos": len(casos_pacotes),
+                        "chamadas_maximas": len(casos_pacotes)
+                        * (2 if args.juiz_ia else 1),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return 0
         if args.max_custo_brl is not None and estimativa_maxima > args.max_custo_brl:
             parser.error(
                 "Estimativa conservadora de "
@@ -186,6 +218,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "gerar_respostas": args.gerar_respostas,
         "juiz_ia": args.juiz_ia,
         "modelo": provedor.modelo if provedor else None,
+        "embedding_model": args.embedding_model,
         "max_custo_brl": args.max_custo_brl,
         "preco_entrada_milhao": precos.entrada_milhao,
         "preco_saida_milhao": precos.saida_milhao,
@@ -205,6 +238,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(json.dumps(relatorio["resumo"], ensure_ascii=False))
     print(f"avaliação_id: {avaliacao_id}; relatório: {args.saida}")
     return 0 if relatorio["resumo"]["aprovado"] else 1
+
+
+def _estimar_custo_pre_execucao(
+    casos_pacotes,
+    *,
+    juiz: JuizJuridicoIA,
+    incluir_juiz: bool,
+    max_output_tokens: int,
+    precos: PrecosTokens,
+) -> float:
+    pacotes = [pacote for _, pacote in casos_pacotes]
+    if incluir_juiz:
+        resposta_maxima = RespostaIA(
+            texto="x" * (max_output_tokens * 4),
+            provedor="estimativa",
+            modelo="estimativa",
+        )
+        pacotes.extend(
+            juiz.preparar(caso, pacote, resposta_maxima)
+            for caso, pacote in casos_pacotes
+        )
+    return estimar_custo_maximo(
+        pacotes,
+        max_output_tokens=max_output_tokens,
+        precos=precos,
+    )
 
 
 def _provedor(args, parser: argparse.ArgumentParser) -> ProvedorMaritaca:

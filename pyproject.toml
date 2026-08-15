@@ -21,6 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["httpx>=0.28,<1", "pytest>=8,<9", "ruff>=0.12,<1"]
+embeddings = ["sentence-transformers>=5.6,<6"]
 
 [project.scripts]
 tjsp-jurisprudencia = "scraping_tjsp.cli:main"
@@ -28,6 +29,7 @@ tjsp-busca = "scraping_tjsp.search_cli:main"
 tjsp-avaliar = "scraping_tjsp.evaluation_cli:main"
 tjsp-auditoria = "scraping_tjsp.audit_cli:main"
 tjsp-preparar-dataset = "scraping_tjsp.dataset_cli:main"
+tjsp-comparar-embeddings = "scraping_tjsp.embedding_comparison_cli:main"
 tjsp-api = "scraping_tjsp.api_cli:main"
 
 [tool.setuptools.packages.find]
@@ -40,6 +42,7 @@ scraping_tjsp = ["schema_sqlite.sql", "web/*.css", "web/*.html", "web/*.js"]
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["src"]
+markers = ["integration: acessa serviços externos reais; exige --run-integration"]
 
 [tool.ruff]
 target-version = "py311"
