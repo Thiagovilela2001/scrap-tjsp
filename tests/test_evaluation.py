@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from scraping_tjsp.cost import PrecosTokens
 from scraping_tjsp.evaluation import (
     AvaliadorJuridico,
     CasoAvaliacao,
@@ -10,7 +11,11 @@ from scraping_tjsp.evaluation import (
     _cobertura_termos,
     carregar_casos,
 )
-from scraping_tjsp.evaluation_cli import construir_parser, main
+from scraping_tjsp.evaluation_cli import (
+    _estimar_custo_pre_execucao,
+    construir_parser,
+    main,
+)
 from scraping_tjsp.rag import FonteContexto, PacoteContextoIA, RespostaIA
 
 
@@ -123,6 +128,23 @@ def test_carrega_dataset_jsonl(tmp_path: Path):
     assert casos[0].caso_id == "1"
 
 
+def test_carrega_dataset_com_mais_de_vinte_casos(tmp_path: Path):
+    caminho = tmp_path / "casos-grande.jsonl"
+    linhas = [
+        json.dumps(
+            {
+                "caso_id": f"caso-{indice}",
+                "pergunta": f"Pergunta {indice}?",
+                "acordaos_relevantes": [str(10_000 + indice)],
+            }
+        )
+        for indice in range(25)
+    ]
+    caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+
+    assert len(carregar_casos(caminho)) == 25
+
+
 def test_dataset_juridico_tem_vinte_fontes_rastreaveis():
     caminho = Path(__file__).parents[1] / "evals" / "casos.jsonl"
 
@@ -147,6 +169,14 @@ def test_parser_aceita_limite_de_casos():
     assert args.max_casos == 5
 
 
+def test_parser_aceita_preflight_de_custo():
+    args = construir_parser().parse_args(
+        ["casos.jsonl", "--gerar-respostas", "--somente-estimar-custo"]
+    )
+
+    assert args.somente_estimar_custo is True
+
+
 def test_cli_recusa_limite_de_casos_invalido():
     with pytest.raises(SystemExit):
         main(["casos.jsonl", "--max-casos", "0"])
@@ -157,14 +187,23 @@ def test_cli_exige_geracao_para_limite_de_custo():
         main(["casos.jsonl", "--max-custo-brl", "0.20"])
 
 
-def test_cli_recusa_limite_de_custo_com_juiz():
-    with pytest.raises(SystemExit):
-        main(
-            [
-                "casos.jsonl",
-                "--gerar-respostas",
-                "--juiz-ia",
-                "--max-custo-brl",
-                "0.20",
-            ]
-        )
+def test_estimativa_com_juiz_cobre_as_duas_chamadas():
+    casos_pacotes = [(_caso(), _pacote())]
+    precos = PrecosTokens()
+
+    sem_juiz = _estimar_custo_pre_execucao(
+        casos_pacotes,
+        juiz=JuizJuridicoIA(),
+        incluir_juiz=False,
+        max_output_tokens=800,
+        precos=precos,
+    )
+    com_juiz = _estimar_custo_pre_execucao(
+        casos_pacotes,
+        juiz=JuizJuridicoIA(),
+        incluir_juiz=True,
+        max_output_tokens=800,
+        precos=precos,
+    )
+
+    assert com_juiz > sem_juiz

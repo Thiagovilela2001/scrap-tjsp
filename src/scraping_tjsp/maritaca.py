@@ -28,18 +28,27 @@ class ProvedorMaritaca:
         timeout: float = 120.0,
         cliente=None,
     ) -> None:
-        chave = api_key or os.environ.get("MARITACA_API_KEY", "")
-        if not chave.strip():
+        chave = (
+            api_key
+            if api_key is not None
+            else os.environ.get("MARITACA_API_KEY", "")
+        )
+        if not chave or not chave.strip():
             raise ErroMaritaca(
                 "MARITACA_API_KEY não configurada. Defina no ambiente ou arquivo .env."
             )
         if max_output_tokens < 1:
             raise ValueError("max_output_tokens deve ser pelo menos 1.")
-        self.modelo = modelo or os.environ.get("MARITACA_MODEL", "sabia-4")
+        self.modelo = (
+            modelo
+            if modelo is not None
+            else os.environ.get("MARITACA_MODEL", "sabia-4")
+        )
         self.max_output_tokens = max_output_tokens
+        base_url = os.environ.get("MARITACA_BASE_URL", self.BASE_URL)
         self.cliente = cliente or OpenAI(
-            api_key=chave,
-            base_url=self.BASE_URL,
+            api_key=chave.strip(),
+            base_url=base_url,
             timeout=timeout,
         )
 

@@ -11,3 +11,4 @@ build/
 *.egg-info/
 output/
 tmp/
+node_modules/

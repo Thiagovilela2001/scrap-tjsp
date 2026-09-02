@@ -13,6 +13,7 @@ class ColecaoFalsa:
     def __init__(self):
         self.lotes = []
         self.exclusoes = []
+        self.metadata = {}
 
     def upsert(self, **kwargs):
         self.lotes.append(kwargs)
@@ -35,8 +36,12 @@ class ColecaoFalsa:
 class ClienteFalso:
     def __init__(self):
         self.colecao = ColecaoFalsa()
+        self.argumentos = None
 
     def get_or_create_collection(self, **kwargs):
+        self.argumentos = kwargs
+        if not self.colecao.metadata:
+            self.colecao.metadata = kwargs.get("metadata", {})
         return self.colecao
 
 
@@ -102,4 +107,21 @@ def test_indexa_chunks_com_citacao_verificavel(tmp_path: Path):
     lote = cliente.colecao.lotes[0]
     assert lote["ids"] == ["acordao:123:pagina:1:chunk:1"]
     assert lote["metadatas"][0]["pagina"] == 1
+    assert lote["metadatas"][0]["arquivo"] == "123.pdf"
     assert lote["metadatas"][0]["citacao"].endswith("p. 1")
+
+
+def test_configura_embedding_alternativo_na_colecao(tmp_path: Path):
+    cliente = ClienteFalso()
+    funcao = object()
+
+    repositorio = RepositorioChunksChroma(
+        tmp_path / "bge",
+        cliente=cliente,
+        modelo_embedding="BAAI/bge-m3",
+        embedding_function=funcao,
+    )
+
+    assert repositorio.modelo_embedding == "BAAI/bge-m3"
+    assert cliente.argumentos["embedding_function"] is funcao
+    assert cliente.argumentos["metadata"]["modelo_embedding"] == "BAAI/bge-m3"

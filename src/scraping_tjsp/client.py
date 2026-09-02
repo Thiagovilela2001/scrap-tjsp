@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import random
+import threading
 import time
-from dataclasses import dataclass
 from typing import ClassVar
 from urllib.parse import urlsplit
 
@@ -13,18 +14,97 @@ from .models import Consulta, ResultadoPesquisa
 from .parser import numero_paginas, parsear_pagina
 
 
-@dataclass(slots=True)
-class _Limitador:
-    intervalo: float
-    ultima_requisicao: float = 0.0
+class TokenBucket:
+    """Limitador de taxa thread-safe baseado em Token Bucket com jitter.
 
-    def aguardar(self) -> None:
-        restante = self.intervalo - (time.monotonic() - self.ultima_requisicao)
-        if restante > 0:
-            time.sleep(restante)
+    Garante espaçamento suave entre requisições respeitando o intervalo mínimo,
+    com jitter aleatório para evitar padrões previsíveis de tráfego.
+    """
+
+    def __init__(
+        self,
+        intervalo: float = 2.0,
+        *,
+        capacidade: float = 1.0,
+        jitter_max: float = 0.20,
+    ) -> None:
+        if intervalo < 1.0:
+            raise ValueError("Intervalo mínimo permitido é 1 segundo.")
+        self.intervalo = float(intervalo)
+        self.taxa = 1.0 / self.intervalo
+        self.capacidade = float(capacidade)
+        self.tokens = float(capacidade)
+        self.jitter_max = max(0.0, float(jitter_max))
+        self.ultimo = time.monotonic()
+        self._lock = threading.Lock()
+
+    def aguardar(self, tokens: float = 1.0) -> None:
+        with self._lock:
+            agora = time.monotonic()
+            decorrido = agora - self.ultimo
+            self.ultimo = agora
+            self.tokens = min(self.capacidade, self.tokens + decorrido * self.taxa)
+
+            if self.tokens < tokens:
+                necessario = tokens - self.tokens
+                espera = necessario / self.taxa
+                if self.jitter_max > 0:
+                    espera += random.uniform(0, self.jitter_max)
+                time.sleep(espera)
+                self.ultimo = time.monotonic()
+                self.tokens = 0.0
+            else:
+                self.tokens -= tokens
 
     def registrar(self) -> None:
-        self.ultima_requisicao = time.monotonic()
+        with self._lock:
+            self.ultimo = time.monotonic()
+
+
+TRIBUNAIS_CONFIG: dict[str, dict[str, str]] = {
+    "tjsp": {
+        "sigla": "TJSP",
+        "nome": "Tribunal de Justiça de São Paulo",
+        "base_url": "https://esaj.tjsp.jus.br/cjsg/",
+        "uf": "SP",
+    },
+    "tjsc": {
+        "sigla": "TJSC",
+        "nome": "Tribunal de Justiça de Santa Catarina",
+        "base_url": "https://esaj.tjsc.jus.br/cjsg/",
+        "uf": "SC",
+    },
+    "tjms": {
+        "sigla": "TJMS",
+        "nome": "Tribunal de Justiça de Mato Grosso do Sul",
+        "base_url": "https://esaj.tjms.jus.br/cjsg/",
+        "uf": "MS",
+    },
+    "tjce": {
+        "sigla": "TJCE",
+        "nome": "Tribunal de Justiça do Ceará",
+        "base_url": "https://esaj.tjce.jus.br/cjsg/",
+        "uf": "CE",
+    },
+    "tjam": {
+        "sigla": "TJAM",
+        "nome": "Tribunal de Justiça do Amazonas",
+        "base_url": "https://consultasaj.tjam.jus.br/cjsg/",
+        "uf": "AM",
+    },
+    "tjal": {
+        "sigla": "TJAL",
+        "nome": "Tribunal de Justiça de Alagoas",
+        "base_url": "https://www.tjal.jus.br/cjsg/",
+        "uf": "AL",
+    },
+    "tjac": {
+        "sigla": "TJAC",
+        "nome": "Tribunal de Justiça do Acre",
+        "base_url": "https://esaj.tjac.jus.br/cjsg/",
+        "uf": "AC",
+    },
+}
 
 
 class TJSPClient:
@@ -42,15 +122,22 @@ class TJSPClient:
     def __init__(
         self,
         *,
+        tribunal: str = "tjsp",
+        base_url: str | None = None,
         intervalo: float = 2.0,
         timeout: float = 30.0,
         session: requests.Session | None = None,
+        limitador: TokenBucket | None = None,
     ) -> None:
         if intervalo < 1.0:
             raise ValueError("Intervalo mínimo permitido é 1 segundo.")
+        self.tribunal = tribunal.lower().strip()
+        config_trib = TRIBUNAIS_CONFIG.get(self.tribunal, {})
+        self.sigla = config_trib.get("sigla", self.tribunal.upper())
+        self.base_url = base_url or config_trib.get("base_url", self.BASE_URL)
         self.timeout = timeout
         self.session = session or requests.Session()
-        self._limitador = _Limitador(intervalo)
+        self._limitador = limitador or TokenBucket(intervalo)
         self._configurar_session()
 
     def pesquisar(
@@ -74,7 +161,7 @@ class TJSPClient:
                 "GET",
                 "trocaDePagina.do",
                 params={"tipoDeDecisao": tipo, "pagina": pagina, "conversationId": ""},
-                headers={"Referer": f"{self.BASE_URL}resultadoCompleta.do"},
+                headers={"Referer": f"{self.base_url}resultadoCompleta.do"},
             )
             total_pagina, itens = parsear_pagina(resposta.content)
             if pagina == 1:
@@ -106,25 +193,35 @@ class TJSPClient:
             }
         )
         retentativas = Retry(
-            total=3,
+            total=4,
+            connect=3,
+            read=3,
+            status=3,
             backoff_factor=1.0,
             status_forcelist=(429, 500, 502, 503, 504),
             allowed_methods=frozenset({"GET", "POST"}),
             respect_retry_after_header=True,
+            raise_on_status=False,
         )
-        self.session.mount("https://", HTTPAdapter(max_retries=retentativas))
+        adapter = HTTPAdapter(
+            max_retries=retentativas,
+            pool_connections=10,
+            pool_maxsize=20,
+        )
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _requisicao(self, metodo: str, caminho: str, **kwargs) -> requests.Response:
-        return self._requisicao_url(metodo, f"{self.BASE_URL}{caminho}", **kwargs)
+        return self._requisicao_url(metodo, f"{self.base_url}{caminho}", **kwargs)
 
     def obter_pdf(self, url: str) -> requests.Response:
         destino = urlsplit(url)
         if (
             destino.scheme != "https"
-            or destino.hostname != "esaj.tjsp.jus.br"
-            or destino.path != "/cjsg/getArquivo.do"
+            or not (destino.hostname and "jus.br" in destino.hostname)
+            or not destino.path.endswith("getArquivo.do")
         ):
-            raise ValueError("URL de PDF fora do endpoint público permitido do TJSP.")
+            raise ValueError(f"URL de PDF fora do endpoint público permitido do tribunal ({url}).")
         return self._requisicao_url(
             "GET",
             url,

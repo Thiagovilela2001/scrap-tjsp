@@ -6,6 +6,9 @@ from pathlib import Path
 import chromadb
 
 from .models import ChunkJuridico, Decisao, ResultadoProcessamento
+from .settings import get_settings
+
+MODELO_EMBEDDING_PADRAO = "all-MiniLM-L6-v2"
 
 
 class RepositorioChroma:
@@ -13,16 +16,24 @@ class RepositorioChroma:
 
     def __init__(
         self,
-        caminho: Path | str = Path("data/chroma"),
+        caminho: Path | str | None = None,
         *,
         cliente=None,
+        modelo_embedding: str = MODELO_EMBEDDING_PADRAO,
+        embedding_function=None,
     ) -> None:
-        self.caminho = Path(caminho)
+        self.caminho = (
+            Path(caminho) if caminho is not None else get_settings().chroma_path
+        )
         self.caminho.mkdir(parents=True, exist_ok=True)
+        self.modelo_embedding = modelo_embedding
         self.cliente = cliente or chromadb.PersistentClient(path=str(self.caminho))
-        self.colecao = self.cliente.get_or_create_collection(
-            name=self.NOME_COLECAO,
-            metadata={
+        self.colecao = _obter_colecao(
+            self.cliente,
+            self.NOME_COLECAO,
+            modelo_embedding,
+            embedding_function,
+            {
                 "descricao": "Ementas públicas coletadas no TJSP/CJSG",
                 "hnsw:space": "cosine",
             },
@@ -85,17 +96,25 @@ class RepositorioChunksChroma:
 
     def __init__(
         self,
-        caminho: Path | str = Path("data/chroma"),
+        caminho: Path | str | None = None,
         *,
         cliente=None,
+        modelo_embedding: str = MODELO_EMBEDDING_PADRAO,
+        embedding_function=None,
     ) -> None:
-        self.caminho = Path(caminho)
+        self.caminho = (
+            Path(caminho) if caminho is not None else get_settings().chroma_path
+        )
         self.caminho.mkdir(parents=True, exist_ok=True)
+        self.modelo_embedding = modelo_embedding
         self.cliente = cliente or chromadb.PersistentClient(path=str(self.caminho))
-        self.colecao = self.cliente.get_or_create_collection(
-            name=self.NOME_COLECAO,
-            metadata={
-                "descricao": "Trechos por p\u00e1gina dos inteiros teores do TJSP/CJSG",
+        self.colecao = _obter_colecao(
+            self.cliente,
+            self.NOME_COLECAO,
+            modelo_embedding,
+            embedding_function,
+            {
+                "descricao": "Trechos por página dos inteiros teores do TJSP/CJSG",
                 "hnsw:space": "cosine",
             },
         )
@@ -105,18 +124,40 @@ class RepositorioChunksChroma:
         resultado: ResultadoProcessamento,
         decisao: Decisao,
     ) -> int:
-        chunks = list(resultado.chunks)
-        self.colecao.delete(where={"cd_acordao": resultado.cd_acordao})
-        for inicio in range(0, len(chunks), 100):
-            lote = chunks[inicio : inicio + 100]
+        return self.indexar_lote([(resultado, decisao)])
+
+    def indexar_lote(
+        self,
+        itens: (
+            list[tuple[ResultadoProcessamento, Decisao]]
+            | tuple[tuple[ResultadoProcessamento, Decisao], ...]
+        ),
+    ) -> int:
+        if not itens:
+            return 0
+        todos_ids: list[str] = []
+        todos_docs: list[str] = []
+        todos_metadatas: list[dict[str, str | int | bool]] = []
+        total_chunks = 0
+        for resultado, decisao in itens:
+            chunks = list(resultado.chunks)
+            if not chunks:
+                continue
+            self.colecao.delete(where={"cd_acordao": resultado.cd_acordao})
+            for chunk in chunks:
+                todos_ids.append(chunk.identificador)
+                todos_docs.append(chunk.texto)
+                todos_metadatas.append(_metadata_chunk(chunk, resultado, decisao))
+                total_chunks += 1
+
+        for inicio in range(0, len(todos_ids), 100):
+            fim = inicio + 100
             self.colecao.upsert(
-                ids=[chunk.identificador for chunk in lote],
-                documents=[chunk.texto for chunk in lote],
-                metadatas=[
-                    _metadata_chunk(chunk, resultado, decisao) for chunk in lote
-                ],
+                ids=todos_ids[inicio:fim],
+                documents=todos_docs[inicio:fim],
+                metadatas=todos_metadatas[inicio:fim],
             )
-        return len(chunks)
+        return total_chunks
 
     def buscar(
         self,
@@ -126,7 +167,7 @@ class RepositorioChunksChroma:
         filtros: dict | None = None,
     ) -> list[dict]:
         if not texto.strip():
-            raise ValueError("Texto de busca n\u00e3o pode ser vazio.")
+            raise ValueError("Texto de busca não pode ser vazio.")
         if limite < 1:
             raise ValueError("Limite deve ser pelo menos 1.")
         quantidade = self.colecao.count()
@@ -155,6 +196,54 @@ class RepositorioChunksChroma:
                 strict=True,
             )
         ]
+
+
+def criar_funcao_embedding(modelo: str):
+    modelo = modelo.strip()
+    if not modelo or modelo == MODELO_EMBEDDING_PADRAO:
+        return None
+    try:
+        from chromadb.utils.embedding_functions import (
+            SentenceTransformerEmbeddingFunction,
+        )
+
+        return SentenceTransformerEmbeddingFunction(
+            model_name=modelo,
+            device="cpu",
+            normalize_embeddings=True,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "Modelo de embedding alternativo exige o extra 'embeddings'. "
+            'Instale com: python -m pip install -e ".[embeddings]"'
+        ) from exc
+
+
+def _obter_colecao(
+    cliente,
+    nome: str,
+    modelo_embedding: str,
+    embedding_function,
+    metadata: dict,
+):
+    funcao = embedding_function
+    if funcao is None:
+        funcao = criar_funcao_embedding(modelo_embedding)
+    metadata = {**metadata, "modelo_embedding": modelo_embedding}
+    argumentos = {"name": nome, "metadata": metadata}
+    if funcao is not None:
+        argumentos["embedding_function"] = funcao
+    colecao = cliente.get_or_create_collection(**argumentos)
+    metadata_existente = getattr(colecao, "metadata", None) or {}
+    modelo_existente = metadata_existente.get(
+        "modelo_embedding", MODELO_EMBEDDING_PADRAO
+    )
+    if modelo_existente != modelo_embedding:
+        raise ValueError(
+            f"Coleção {nome!r} usa embedding {modelo_existente!r}, não "
+            f"{modelo_embedding!r}. Use outro --chroma-path."
+        )
+    return colecao
 
 
 def _metadata(decisao: Decisao) -> dict[str, str | int | bool]:
@@ -196,8 +285,9 @@ def _metadata_chunk(
             "pagina": chunk.pagina,
             "indice_chunk": chunk.indice,
             "sha256": resultado.sha256,
+            "arquivo": Path(resultado.caminho_local).name,
             "citacao": (
-                f"Processo {decisao.processo}, ac\u00f3rd\u00e3o "
+                f"Processo {decisao.processo}, acórdão "
                 f"{decisao.cd_acordao}, p. {chunk.pagina}"
             ),
         }

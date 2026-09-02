@@ -26,11 +26,25 @@ O coletor não contorna CAPTCHA, autenticação, segredo de justiça ou bloqueio
 
 ## Instalação
 
+No Windows, caminho recomendado. O script cria ou sincroniza `.venv`, valida
+dependências e roda Ruff + pytest:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap-dev.ps1
+```
+
+Instalação manual equivalente, sempre usando explicitamente o Python do ambiente:
+
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip check
 ```
+
+Ativar `.venv` continua opcional. Evite `python -m pytest` fora do ambiente: um
+Python global pode carregar versões antigas de FastAPI/Starlette e produzir falhas
+enganosas no `TestClient`. A suíte agora interrompe cedo com instrução objetiva
+quando detecta esse conflito.
 
 ### OCR em português no Windows
 
@@ -82,7 +96,7 @@ Na primeira execução, o coletor cria automaticamente estas tabelas SQLite:
 - `execucoes_ia` e `fontes_execucao_ia`: trilha completa de cada chamada;
 - `execucoes_avaliacao` e `casos_avaliacao`: histórico dos relatórios de qualidade.
 
-Ementas são gravadas na coleção Chroma `ementas_tjsp`, usando `cd_acordao` como identificador estável. Modelo padrão local: `all-MiniLM-L6-v2`; arquivos do modelo podem ser baixados automaticamente na primeira indexação. Ele serve ao MVP sem configuração, mas deverá ser comparado com BGE-M3 antes da avaliação jurídica de relevância.
+Ementas são gravadas na coleção Chroma `ementas_tjsp`, usando `cd_acordao` como identificador estável. Modelo padrão local: `all-MiniLM-L6-v2`; arquivos do modelo podem ser baixados automaticamente na primeira indexação. Ele serve ao MVP sem configuração. O fluxo de avaliação abaixo permite compará-lo com BGE-M3 antes de usar relevância semanticamente em contexto jurídico.
 
 Trechos dos inteiros teores ficam na coleção `chunks_tjsp`. Cada ID segue `acordao:{cd_acordao}:pagina:{pagina}:chunk:{indice}`. SQLite continua sendo fonte de verdade; Chroma pode ser reconstruído.
 
@@ -166,7 +180,9 @@ Inicie o serviço somente na máquina local:
 tjsp-api
 ```
 
-A documentação interativa fica em `http://127.0.0.1:8000/docs`. O endereço padrão não expõe o serviço para a rede.
+A interface web fica em `http://127.0.0.1:8000/` e apresenta somente o fluxo principal de pesquisa assistida por IA. A documentação interativa, com os endpoints auxiliares, fica em `http://127.0.0.1:8000/docs`. O endereço padrão não expõe o serviço para a rede.
+
+Antes da primeira pesquisa, prepare a base padrão com `tjsp-preparar-dataset evals/casos.jsonl`. Para reutilizar outra base já processada, configure `TJSP_SQLITE_PATH` e `TJSP_CHROMA_PATH` no `.env`; a interface informa quando a base selecionada não possui trechos indexados.
 
 Busca híbrida sem chamada de IA:
 
@@ -206,16 +222,30 @@ Endpoints disponíveis:
 - `GET /saude`: configuração pública e estado do serviço;
 - `POST /buscar`: recuperação híbrida local, sem cobrança;
 - `POST /perguntar`: RAG com Maritaca, fontes, tokens e custo estimado;
+- `POST /tjsp/pesquisar`: consulta controlada no CJSG, sem chamada de IA;
+- `POST /tjsp/pesquisa-assistida`: Maritaca planeja até três consultas, o coletor busca no CJSG e a Maritaca ranqueia as ementas;
+- `POST /tjsp/importar`: baixa, processa e indexa acórdãos selecionados;
+- `POST /tjsp/analisar-documentos`: recupera trechos dos PDFs selecionados, gera argumentos com páginas e valida referências jurídicas;
+- `GET /documentos/{cd_acordao}`: abre o PDF local auditado pelo código do acórdão;
 - `GET /auditorias`: últimas chamadas registradas;
 - `GET /auditorias/{id}`: detalhes, fontes e resultado de uma chamada.
 
 O servidor limita cada requisição a `TJSP_API_MAX_CUSTO_BRL=0.10` e `TJSP_API_MAX_OUTPUT_TOKENS=2000`. O cliente pode pedir limites menores, nunca maiores. A estimativa conservadora é calculada antes da chamada; ausência de fontes, chave Maritaca ou orçamento suficiente impede a chamada paga. Caminhos podem ser alterados por `TJSP_SQLITE_PATH` e `TJSP_CHROMA_PATH` no `.env`.
+
+A área “Buscar no TJSP” consulta no máximo `TJSP_API_MAX_PAGINAS_TJSP=1` página por pesquisa e importa até `TJSP_API_MAX_IMPORTACAO_PDFS=5` PDFs por operação. O intervalo padrão entre requisições externas é de 2 segundos. O processamento usa OCR quando necessário; nenhuma resposta de IA é gerada durante coleta ou indexação.
+
+A área “Pesquisa com IA” recebe a questão jurídica e o contexto factual. A Maritaca primeiro cria consultas estruturadas; o scraper executa cada consulta no TJSP; depois a Maritaca ranqueia somente os processos encontrados e explica possível uso, aderência fática e ressalvas. Se faltarem fatos, ela pede esclarecimentos antes de consultar o portal. O teto total padrão das duas chamadas é `TJSP_API_MAX_CUSTO_PESQUISA_BRL=0.20`. PDFs não são baixados automaticamente: o usuário revisa os candidatos e seleciona quais serão importados.
+
+Após a importação, a interface oferece “Analisar PDFs com IA”. Essa ação explícita faz uma nova chamada Maritaca, limitada por `TJSP_API_MAX_CUSTO_ANALISE_BRL=0.20`. A recuperação híbrida é restrita aos acórdãos selecionados, diversifica páginas e devolve arquivo, processo, acórdão, página e link local. Um validador determinístico confere citações `[Fonte N]`, números de processo, acórdãos, temas, súmulas, artigos, páginas, datas, percentuais e valores contra os trechos recuperados.
 
 O serviço não possui autenticação de usuário. Mantenha o `host` padrão `127.0.0.1`; não use `--host 0.0.0.0` em ambiente acessível por terceiros sem adicionar autenticação e proteção de tráfego.
 
 ## Avaliação jurídica
 
 O arquivo [evals/casos.jsonl](evals/casos.jsonl) contém 20 casos reais e rastreáveis; [evals/casos.example.jsonl](evals/casos.example.jsonl) mostra o formato mínimo. Cada linha define pergunta, filtros, chunks ou acórdãos relevantes, termos esperados, resposta de referência, limiares e a URL oficial da fonte. Consulte [evals/README.md](evals/README.md) para conhecer o recorte.
+
+O carregador não impõe limite de 20 casos. Datasets maiores são processados por
+inteiro; `--max-casos N` restringe somente execuções de smoke ou amostragem.
 
 Preparação reproduzível das fontes e avaliação local completa:
 
@@ -240,10 +270,23 @@ Avaliação completa, gerando resposta e usando segunda chamada Maritaca como ju
 tjsp-avaliar evals/casos.jsonl `
   --gerar-respostas `
   --juiz-ia `
-  --modelo sabia-4
+  --max-output-tokens 800 `
+  --somente-estimar-custo
 ```
 
-`--gerar-respostas` e `--juiz-ia` podem gerar cobrança. O relatório mede `recall`, `hit`, MRR, cobertura dos termos, precisão/cobertura das citações e similaridade com resposta de referência. O juiz opcional pontua aderência às fontes, correção jurídica, completude e citações. Resultados e chamadas ficam auditados no SQLite.
+Esse preflight não chama o provedor. Com base preparada e preços atuais, use o
+valor devolvido para aprovar um teto antes da execução paga:
+
+```powershell
+tjsp-avaliar evals/casos.jsonl `
+  --gerar-respostas `
+  --juiz-ia `
+  --modelo sabia-4 `
+  --max-output-tokens 800 `
+  --max-custo-brl 3.00
+```
+
+`--gerar-respostas` e `--juiz-ia` podem gerar cobrança. Ajuste `3.00` para o teto aprovado. A estimativa conservadora cobre respostas e juiz e aborta antes da primeira chamada quando excede o teto. O relatório mede `recall`, `hit`, MRR, cobertura dos termos, precisão/cobertura das citações e similaridade com resposta de referência. O juiz opcional pontua aderência às fontes, correção jurídica, completude e citações. Resultados e chamadas ficam auditados no SQLite.
 
 Para um smoke controlado, limite a quantidade de chamadas pagas e deixe o juiz desligado:
 
@@ -256,9 +299,37 @@ tjsp-avaliar evals/casos.jsonl `
   --max-custo-brl 0.40
 ```
 
-O teto usa uma estimativa conservadora antes de qualquer chamada. Os preços padrão do Sabiá 4, verificados em 14/08/2026, são R$ 5,00 por milhão de tokens de entrada e R$ 20,00 por milhão de tokens de saída. Atualize-os com `--preco-entrada-milhao` e `--preco-saida-milhao` quando a tabela mudar. O limite ainda não pode ser combinado com `--juiz-ia`.
+O teto usa uma estimativa conservadora antes de qualquer chamada. Os preços padrão do Sabiá 4, verificados em 14/08/2026, são R$ 5,00 por milhão de tokens de entrada e R$ 20,00 por milhão de tokens de saída. Atualize-os com `--preco-entrada-milhao` e `--preco-saida-milhao` quando a tabela mudar.
 
 Pontuação do juiz de IA é sinal heurístico para regressão, não substitui revisão jurídica humana.
+
+### Comparação all-MiniLM-L6-v2 vs BGE-M3
+
+BGE-M3 usa dependência opcional e download local maior. Cada modelo precisa de um
+`--chroma-path` separado; misturar dimensões na mesma coleção é recusado.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,embeddings]"
+
+tjsp-preparar-dataset evals/casos.jsonl `
+  --chroma-path data/chroma-minilm `
+  --embedding-model all-MiniLM-L6-v2 `
+  --saida-avaliacao output/avaliacao-minilm.json
+
+tjsp-preparar-dataset evals/casos.jsonl `
+  --chroma-path data/chroma-bge-m3 `
+  --embedding-model BAAI/bge-m3 `
+  --saida-avaliacao output/avaliacao-bge-m3.json
+
+tjsp-comparar-embeddings `
+  output/avaliacao-minilm.json `
+  output/avaliacao-bge-m3.json `
+  --saida output/comparacao-embeddings.json
+```
+
+Comparação registra modelo, taxa de aprovação, recall, MRR, cobertura de termos e
+delta do candidato contra a base. Download e inferência dos embeddings são locais;
+nenhuma chamada Maritaca ocorre nessa avaliação.
 
 ## Controles de carga
 
@@ -274,5 +345,17 @@ Pontuação do juiz de IA é sinal heurístico para regressão, não substitui r
 ## Testes
 
 ```powershell
-python -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pytest
 ```
+
+GitHub Actions repete instalação limpa, `pip check`, Ruff e pytest em Python 3.11
+e 3.13 a cada push e pull request.
+
+Teste opcional contra o portal público real, desligado no CI padrão:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest --run-integration tests/test_integration_tjsp.py
+```
+
+Pode falhar por indisponibilidade ou validação humana do portal; não contorna CAPTCHA.
