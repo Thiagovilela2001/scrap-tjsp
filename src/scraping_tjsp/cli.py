@@ -10,11 +10,15 @@ from .client import TJSPClient
 from .downloader import DownloadPDFError, PDFDownloader
 from .models import Consulta, Decisao
 from .processor import ProcessadorPDF, ProcessamentoPDFError
+from .settings import Settings, get_settings
 from .storage import RepositorioSQLite
 from .vector_store import RepositorioChroma, RepositorioChunksChroma
 
 
-def construir_parser() -> argparse.ArgumentParser:
+def construir_parser(
+    config: Settings | None = None,
+) -> argparse.ArgumentParser:
+    cfg = config or get_settings()
     parser = argparse.ArgumentParser(
         prog="tjsp-jurisprudencia",
         description="Coleta jurisprudência pública do TJSP/CJSG.",
@@ -47,22 +51,28 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--sem-sinonimos", action="store_true")
     parser.add_argument(
-        "--paginas", type=int, default=1, help="Máximo de páginas; padrão: 1."
+        "--paginas",
+        type=int,
+        default=cfg.max_paginas_tjsp,
+        help=f"Máximo de páginas; padrão: {cfg.max_paginas_tjsp}.",
     )
     parser.add_argument(
-        "--intervalo", type=float, default=2.0, help="Segundos entre requisições."
+        "--intervalo",
+        type=float,
+        default=cfg.intervalo_tjsp,
+        help=f"Segundos entre requisições; padrão: {cfg.intervalo_tjsp}.",
     )
     parser.add_argument(
         "--sqlite-path",
         type=Path,
-        default=Path("data/tjsp.sqlite3"),
-        help="Arquivo SQLite; padrão: data/tjsp.sqlite3.",
+        default=cfg.sqlite_path,
+        help=f"Arquivo SQLite; padrão: {cfg.sqlite_path}.",
     )
     parser.add_argument(
         "--chroma-path",
         type=Path,
-        default=Path("data/chroma"),
-        help="Diretório Chroma; padrão: data/chroma.",
+        default=cfg.chroma_path,
+        help=f"Diretório Chroma; padrão: {cfg.chroma_path}.",
     )
     parser.add_argument(
         "--sem-persistencia",
@@ -83,41 +93,42 @@ def construir_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--diretorio-pdfs",
         type=Path,
-        default=Path("data/pdfs"),
+        default=cfg.diretorio_pdfs,
+        help=f"Diretório de PDFs; padrão: {cfg.diretorio_pdfs}.",
     )
     parser.add_argument(
         "--max-mb-pdf",
         type=int,
-        default=50,
-        help="Tamanho máximo de cada PDF; padrão: 50 MB.",
+        default=cfg.max_mb_pdf,
+        help=f"Tamanho máximo de cada PDF; padrão: {cfg.max_mb_pdf} MB.",
     )
     parser.add_argument(
         "--processar-pdfs",
         action="store_true",
-        help="Extrai texto por p\u00e1gina e indexa chunks dos PDFs baixados.",
+        help="Extrai texto por página e indexa chunks dos PDFs baixados.",
     )
     parser.add_argument(
         "--sem-ocr",
         action="store_true",
-        help="N\u00e3o tenta OCR em p\u00e1ginas com pouco texto nativo.",
+        help="Não tenta OCR em páginas com pouco texto nativo.",
     )
     parser.add_argument(
         "--tamanho-chunk",
         type=int,
-        default=1500,
-        help="Tamanho m\u00e1ximo aproximado de cada chunk; padr\u00e3o: 1500.",
+        default=cfg.tamanho_chunk,
+        help=f"Tamanho máximo aproximado de cada chunk; padrão: {cfg.tamanho_chunk}.",
     )
     parser.add_argument(
         "--sobreposicao-chunk",
         type=int,
-        default=200,
-        help="Sobreposi\u00e7\u00e3o aproximada entre chunks; padr\u00e3o: 200.",
+        default=cfg.sobreposicao_chunk,
+        help=f"Sobreposição aproximada entre chunks; padrão: {cfg.sobreposicao_chunk}.",
     )
     parser.add_argument(
         "--saida",
         type=Path,
-        default=Path("output/resultados.jsonl"),
-        help="Arquivo .jsonl ou .csv.",
+        default=cfg.saida_path,
+        help=f"Arquivo .jsonl ou .csv; padrão: {cfg.saida_path}.",
     )
     return parser
 

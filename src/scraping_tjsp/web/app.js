@@ -7,14 +7,13 @@ const estado = {
   recomendados: [],
   maxImportacao: 5,
   maxCustoAnaliseDocumentalBrl: null,
-  perguntaContexto: null,
+  ultimoResultado: null,
 };
+
+// Elementos da Interface
 const formulario = document.querySelector("#formulario-pesquisa");
 const pergunta = document.querySelector("#pergunta");
 const botaoEnviar = document.querySelector("#botao-enviar");
-const avisoModo = document.querySelector("#aviso-modo");
-const limitesIA = document.querySelector("#limites-ia");
-const painelFiltros = document.querySelector(".painel-filtros");
 const estadoVazio = document.querySelector("#estado-vazio");
 const estadoCarregando = document.querySelector("#estado-carregando");
 const estadoErro = document.querySelector("#estado-erro");
@@ -30,9 +29,6 @@ const tituloResultados = document.querySelector("#titulo-resultados");
 const contadorResultados = document.querySelector("#contador-resultados");
 const listaAuditorias = document.querySelector("#lista-auditorias");
 const botaoAuditorias = document.querySelector("#atualizar-auditorias");
-const filtrosLocais = document.querySelector("#filtros-locais");
-const filtrosTJSP = document.querySelector("#filtros-tjsp");
-const limitesLocais = document.querySelector("#limites-locais");
 const barraImportacao = document.querySelector("#barra-importacao");
 const botaoImportar = document.querySelector("#botao-importar");
 const quantidadeSelecionada = document.querySelector("#quantidade-selecionada");
@@ -42,24 +38,164 @@ const etapasPesquisa = [...document.querySelectorAll("[data-etapa]")];
 const estadoEtapa = document.querySelector("#estado-etapa");
 const botaoSelecionarRecomendados = document.querySelector("#selecionar-recomendados");
 const botaoLimparSelecao = document.querySelector("#limpar-selecao");
+const botaoCopiarRelatorio = document.querySelector("#botao-copiar-relatorio");
+const barraFiltros = document.querySelector("#barra-chips-filtros");
+const conteinerChips = document.querySelector("#chips-container");
+const conteinerHistorico = document.querySelector("#historico-pesquisas");
+const gradeHistorico = document.querySelector("#grade-chips-historico");
+const botaoTema = document.querySelector("#alternar-tema");
+const gavetaPDF = document.querySelector("#gaveta-pdf");
+const backdropGaveta = document.querySelector("#backdrop-gaveta");
+const iframePDF = document.querySelector("#iframe-pdf");
+const tituloGaveta = document.querySelector("#titulo-gaveta-pdf");
+const subtituloGaveta = document.querySelector("#subtitulo-gaveta-pdf");
+const linkExternoPDF = document.querySelector("#link-externo-pdf");
+const botaoFecharGaveta = document.querySelector("#fechar-gaveta-pdf");
+
+const CHAVE_HISTORICO = "juris_tjsp_historico_buscas";
+const CHAVE_TEMA = "juris_tjsp_tema";
+
+// ============================================================================
+// INICIALIZAÇÃO
+// ============================================================================
+
+inicializarTema();
+renderizarHistorico();
 
 document.querySelectorAll("[data-consulta]").forEach((botao) => {
   botao.addEventListener("click", () => {
     pergunta.value = botao.dataset.consulta;
     pergunta.focus();
+    ajustarAlturaTextarea(pergunta);
   });
 });
 
-formulario.addEventListener("submit", executarPesquisa);
-botaoAuditorias.addEventListener("click", carregarAuditorias);
-botaoImportar.addEventListener("click", importarSelecionados);
-botaoSelecionarRecomendados.addEventListener("click", selecionarRecomendados);
-botaoLimparSelecao.addEventListener("click", limparSelecao);
+// Suporte ao envio por tecla Enter (Shift+Enter para quebra de linha)
+if (pergunta) {
+  pergunta.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      formulario.dispatchEvent(new Event("submit", { cancelable: true }));
+    }
+  });
+  pergunta.addEventListener("input", () => ajustarAlturaTextarea(pergunta));
+}
 
-alterarModo("assistida");
+function ajustarAlturaTextarea(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 220) + "px";
+}
+
+formulario.addEventListener("submit", executarPesquisa);
+if (botaoAuditorias) botaoAuditorias.addEventListener("click", carregarAuditorias);
+if (botaoImportar) botaoImportar.addEventListener("click", importarSelecionados);
+if (botaoSelecionarRecomendados) botaoSelecionarRecomendados.addEventListener("click", selecionarRecomendados);
+if (botaoLimparSelecao) botaoLimparSelecao.addEventListener("click", limparSelecao);
+if (botaoCopiarRelatorio) botaoCopiarRelatorio.addEventListener("click", copiarRelatorioFormatado);
+if (botaoFecharGaveta) botaoFecharGaveta.addEventListener("click", fecharVisualizadorPDF);
+if (backdropGaveta) backdropGaveta.addEventListener("click", fecharVisualizadorPDF);
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && gavetaPDF && !gavetaPDF.hidden) {
+    fecharVisualizadorPDF();
+  }
+});
+
 atualizarEtapa("caso");
 verificarSaude();
 carregarAuditorias();
+
+// ============================================================================
+// GERENCIADOR DE TEMA
+// ============================================================================
+
+function inicializarTema() {
+  const temaSalvo = localStorage.getItem(CHAVE_TEMA);
+  if (temaSalvo) {
+    document.documentElement.setAttribute("data-tema", temaSalvo);
+  } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    document.documentElement.setAttribute("data-tema", "escuro");
+  }
+
+  if (botaoTema) {
+    botaoTema.addEventListener("click", () => {
+      const atual = document.documentElement.getAttribute("data-tema");
+      const novo = atual === "escuro" ? "claro" : "escuro";
+      document.documentElement.setAttribute("data-tema", novo);
+      localStorage.setItem(CHAVE_TEMA, novo);
+    });
+  }
+}
+
+// ============================================================================
+// HISTÓRICO DE CONSULTAS
+// ============================================================================
+
+function salvarHistorico(busca) {
+  if (!busca || busca.length < 3) return;
+  let itens = carregarHistorico();
+  itens = [busca, ...itens.filter((item) => item.toLowerCase() !== busca.toLowerCase())].slice(0, 5);
+  try {
+    localStorage.setItem(CHAVE_HISTORICO, JSON.stringify(itens));
+  } catch {}
+  renderizarHistorico();
+}
+
+function carregarHistorico() {
+  try {
+    const dados = JSON.parse(localStorage.getItem(CHAVE_HISTORICO) || "[]");
+    return Array.isArray(dados) ? dados : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderizarHistorico() {
+  const itens = carregarHistorico();
+  if (!conteinerHistorico || !gradeHistorico) return;
+  gradeHistorico.replaceChildren();
+  if (itens.length === 0) {
+    conteinerHistorico.hidden = true;
+    return;
+  }
+  itens.forEach((busca) => {
+    const chip = criarElemento("button", "chip-historico", busca);
+    chip.type = "button";
+    chip.title = `Repetir busca: ${busca}`;
+    chip.addEventListener("click", () => {
+      pergunta.value = busca;
+      pergunta.focus();
+      ajustarAlturaTextarea(pergunta);
+    });
+    gradeHistorico.append(chip);
+  });
+  conteinerHistorico.hidden = false;
+}
+
+// ============================================================================
+// VISUALIZADOR DE PDF LATERAL
+// ============================================================================
+
+function abrirVisualizadorPDF(url, titulo = "Acórdão do TJSP", subtitulo = "") {
+  if (!gavetaPDF || !iframePDF) return;
+  tituloGaveta.textContent = titulo;
+  subtituloGaveta.textContent = subtitulo || "Documento Oficial";
+  linkExternoPDF.href = url;
+  iframePDF.src = url;
+  gavetaPDF.hidden = false;
+  if (backdropGaveta) backdropGaveta.hidden = false;
+}
+
+function fecharVisualizadorPDF() {
+  if (!gavetaPDF) return;
+  gavetaPDF.hidden = true;
+  if (backdropGaveta) backdropGaveta.hidden = true;
+  iframePDF.src = "about:blank";
+}
+
+// ============================================================================
+// ETAPAS & SAÚDE DO SERVIÇO
+// ============================================================================
 
 function atualizarEtapa(etapa, concluida = false) {
   const indiceAtual = etapasPesquisa.findIndex((item) => item.dataset.etapa === etapa);
@@ -70,37 +206,10 @@ function atualizarEtapa(etapa, concluida = false) {
     if (ativa) item.setAttribute("aria-current", "step");
     else item.removeAttribute("aria-current");
   });
-  if (indiceAtual >= 0) {
-    const rotulo = etapasPesquisa[indiceAtual].querySelector("strong").textContent;
+  if (indiceAtual >= 0 && estadoEtapa) {
+    const rotulo = etapasPesquisa[indiceAtual].querySelector("strong")?.textContent || etapa;
     estadoEtapa.textContent = `Etapa ${indiceAtual + 1} de ${etapasPesquisa.length}: ${rotulo}`;
   }
-}
-
-function alterarModo(modo) {
-  estado.modo = ["busca", "ia", "tjsp", "assistida"].includes(modo) ? modo : "busca";
-  const coletaTJSP = estado.modo === "tjsp";
-  const pesquisaAssistida = estado.modo === "assistida";
-  filtrosLocais.hidden = coletaTJSP;
-  filtrosTJSP.hidden = !coletaTJSP;
-  limitesLocais.hidden = coletaTJSP;
-  limitesIA.hidden = estado.modo !== "ia";
-  painelFiltros.hidden = pesquisaAssistida;
-  document.querySelector("#limite-fontes").max = estado.modo === "ia" ? "20" : "50";
-  const textosBotao = {
-    busca: "Buscar jurisprudência",
-    ia: "Gerar resposta fundamentada",
-    tjsp: "Pesquisar no site do TJSP",
-    assistida: "Iniciar pesquisa com IA",
-  };
-  const avisos = {
-    busca: "Busca local em SQLite + Chroma. Nenhuma chamada de IA.",
-    ia: "Usa Maritaca após verificar fontes e teto de custo.",
-    tjsp: "Consulta externa controlada no CJSG. Sem chamada de IA.",
-    assistida:
-      "Maritaca planeja a pesquisa; scraper consulta o TJSP em tempo real.",
-  };
-  botaoEnviar.querySelector("span").textContent = textosBotao[estado.modo];
-  avisoModo.textContent = avisos[estado.modo];
 }
 
 async function verificarSaude() {
@@ -109,123 +218,125 @@ async function verificarSaude() {
     const resposta = await fetch("/saude");
     if (!resposta.ok) throw new Error("API indisponível");
     const dados = await resposta.json();
-    const campoCusto = formulario.elements.max_custo_brl;
-    const campoTokens = formulario.elements.max_output_tokens;
-    campoCusto.max = String(dados.max_custo_brl);
-    campoTokens.max = String(dados.max_output_tokens);
-    if (Number(campoCusto.value) > dados.max_custo_brl) {
-      campoCusto.value = String(dados.max_custo_brl);
-    }
-    if (Number(campoTokens.value) > dados.max_output_tokens) {
-      campoTokens.value = String(dados.max_output_tokens);
-    }
     estado.maxImportacao = Number(dados.max_importacao_pdfs) || 5;
     const maxCustoAnalise = Number(dados.max_custo_analise_documental_brl);
     estado.maxCustoAnaliseDocumentalBrl =
       Number.isFinite(maxCustoAnalise) && maxCustoAnalise > 0 ? maxCustoAnalise : null;
-    formulario.elements.paginas_tjsp.max = String(dados.max_paginas_tjsp || 1);
-    elemento.classList.add("online");
-    elemento.classList.remove("sem-dados");
-    elemento.classList.remove("offline");
-    elemento.lastChild.textContent = " API ativa · pesquisa TJSP";
+
+    if (elemento) {
+      elemento.classList.add("online");
+      elemento.classList.remove("offline");
+      elemento.lastChild.textContent = " IA pronta";
+    }
   } catch (_erro) {
-    elemento.classList.add("offline");
-    elemento.classList.remove("online", "sem-dados");
-    elemento.lastChild.textContent = " API indisponível";
+    if (elemento) {
+      elemento.classList.add("offline");
+      elemento.classList.remove("online");
+      elemento.lastChild.textContent = " Conexão instável";
+    }
   }
 }
 
+// ============================================================================
+// EXECUÇÃO DA PESQUISA AUTOMATIZADA
+// ============================================================================
+
+async function consumirSSEAssistida(payload) {
+  const resposta = await fetch("/tjsp/pesquisa-assistida/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!resposta.ok) {
+    const erroJson = await resposta.json().catch(() => null);
+    throw new Error(mensagemDaAPI(erroJson));
+  }
+  const reader = resposta.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let resultadoFinal = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocos = buffer.split("\n\n");
+    buffer = blocos.pop() || "";
+
+    for (const bloco of blocos) {
+      const linhaData = bloco.split("\n").find((l) => l.startsWith("data: "));
+      if (!linhaData) continue;
+      try {
+        const evento = JSON.parse(linhaData.slice(6));
+        if (evento.tipo === "progresso") {
+          estadoCarregando.querySelector("strong").textContent = evento.mensagem;
+          if (evento.etapa === "coleta") {
+            atualizarEtapa("precedentes");
+          } else if (evento.etapa === "analise") {
+            atualizarEtapa("analise");
+          }
+        } else if (evento.tipo === "resultado") {
+          resultadoFinal = evento.dados;
+        } else if (evento.tipo === "erro") {
+          throw new Error(evento.erro);
+        }
+      } catch (e) {
+        if (e.message && !e.message.includes("JSON")) throw e;
+      }
+    }
+  }
+
+  if (!resultadoFinal) {
+    throw new Error("A resposta não pôde ser completada pelo servidor.");
+  }
+  return resultadoFinal;
+}
+
 async function executarPesquisa(evento) {
-  evento.preventDefault();
+  if (evento) evento.preventDefault();
   const texto = pergunta.value.trim();
   if (!texto) {
     pergunta.focus();
     return;
   }
-  if (estado.perguntaContexto !== null && estado.perguntaContexto !== texto) {
-    formulario.elements.contexto_caso.value = "";
-  }
-  estado.perguntaContexto = texto;
-
+  salvarHistorico(texto);
   document.body.classList.add("fluxo-iniciado");
+
   atualizarEtapa(
-    formulario.elements.contexto_caso.value.trim() ? "precedentes" : "esclarecimentos",
+    formulario.elements.contexto_caso && formulario.elements.contexto_caso.value.trim()
+      ? "precedentes"
+      : "esclarecimentos",
   );
   prepararCarregamento();
-  const limite = Number(formulario.elements.limite.value || 6);
-  let endpoint;
-  let payload;
-  if (estado.modo === "assistida") {
-    endpoint = "/tjsp/pesquisa-assistida";
-    payload = {
-      pergunta: texto,
-      contexto_caso: formulario.elements.contexto_caso.value.trim(),
-    };
-  } else if (estado.modo === "tjsp") {
-    endpoint = "/tjsp/pesquisar";
-    payload = {
-      pesquisa: texto,
-      inicio: converterDataBR(formulario.elements.inicio_tjsp.value),
-      fim: converterDataBR(formulario.elements.fim_tjsp.value),
-      tipo: formulario.elements.tipo_tjsp.value,
-      origem: formulario.elements.origem_tjsp.value,
-      sinonimos: formulario.elements.sinonimos_tjsp.checked,
-      paginas: Number(formulario.elements.paginas_tjsp.value || 1),
-    };
-  } else {
-    const filtros = coletarFiltros();
-    endpoint = estado.modo === "ia" ? "/perguntar" : "/buscar";
-    payload =
-      estado.modo === "ia"
-        ? {
-            pergunta: texto,
-            limite_fontes: limite,
-            max_output_tokens: Number(formulario.elements.max_output_tokens.value),
-            max_custo_brl: Number(formulario.elements.max_custo_brl.value),
-            filtros,
-          }
-        : { pergunta: texto, limite, filtros };
-  }
+
+  const payload = {
+    pergunta: texto,
+    contexto_caso: formulario.elements.contexto_caso ? formulario.elements.contexto_caso.value.trim() : "",
+  };
 
   try {
-    const resposta = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(mensagemDaAPI(dados));
-    if (estado.modo === "assistida") {
-      renderizarPesquisaAssistida(dados);
-      await carregarAuditorias();
-    } else if (estado.modo === "ia") {
-      renderizarResposta(dados);
-      await carregarAuditorias();
-    } else if (estado.modo === "tjsp") {
-      renderizarPesquisaTJSP(dados);
-    } else {
-      renderizarBusca(dados);
+    let dados;
+    try {
+      dados = await consumirSSEAssistida(payload);
+    } catch (_erroStream) {
+      const resposta = await fetch("/tjsp/pesquisa-assistida", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      dados = await resposta.json();
+      if (!resposta.ok) throw new Error(mensagemDaAPI(dados));
     }
+    estado.ultimoResultado = dados;
+    renderizarPesquisaAssistida(dados);
+    await carregarAuditorias();
     focarResultados();
   } catch (erro) {
-    exibirErro(erro instanceof Error ? erro.message : "Erro inesperado.");
+    exibirErro(erro instanceof Error ? erro.message : "Erro inesperado ao consultar o TJSP.");
   } finally {
     estadoCarregando.hidden = true;
     botaoEnviar.disabled = false;
   }
-}
-
-function coletarFiltros() {
-  const filtros = {};
-  ["processo", "cd_acordao", "assunto", "orgao_julgador", "classe"].forEach(
-    (nome) => {
-      const valor = formulario.elements[nome].value.trim();
-      if (valor) filtros[nome] = valor;
-    },
-  );
-  const pagina = formulario.elements.pagina.value;
-  if (pagina) filtros.pagina = Number(pagina);
-  return filtros;
 }
 
 function prepararCarregamento() {
@@ -236,148 +347,161 @@ function prepararCarregamento() {
   barraImportacao.hidden = true;
   resultadoImportacao.hidden = true;
   contadorResultados.hidden = true;
+  if (botaoCopiarRelatorio) botaoCopiarRelatorio.hidden = true;
+  if (barraFiltros) barraFiltros.hidden = true;
   listaResultados.replaceChildren();
   gradeFontes.replaceChildren();
   estadoCarregando.hidden = false;
-  estadoCarregando.querySelector("strong").textContent =
-    estado.modo === "assistida"
-      ? "Planejando pesquisa jurisprudencial"
-      : estado.modo === "tjsp"
-        ? "Consultando o portal do TJSP"
-        : "Consultando a base local";
+  estadoCarregando.querySelector("strong").textContent = "Pensando e consultando o TJSP...";
   estadoCarregando.querySelector("span").textContent =
-    estado.modo === "assistida"
-      ? "Maritaca formulará as consultas e analisará as ementas encontradas…"
-      : estado.modo === "tjsp"
-        ? "A pesquisa externa respeita o intervalo entre requisições…"
-        : "Combinando busca lexical e semântica…";
+    "Interpretando termos jurídicos e localizando decisões aderentes no tribunal...";
   botaoEnviar.disabled = true;
-  tituloResultados.textContent =
-    estado.modo === "assistida"
-      ? "Planejando e consultando o TJSP"
-      : estado.modo === "ia"
-      ? "Preparando resposta"
-      : estado.modo === "tjsp"
-        ? "Consultando o TJSP"
-        : "Pesquisando decisões";
+  tituloResultados.textContent = "Pesquisando decisões...";
 }
 
-function renderizarBusca(dados) {
-  const resultados = Array.isArray(dados.resultados) ? dados.resultados : [];
-  tituloResultados.textContent =
-    resultados.length === 0 ? "Nenhuma decisão encontrada" : "Decisões encontradas";
-  contadorResultados.textContent = `${resultados.length} resultado${resultados.length === 1 ? "" : "s"}`;
-  contadorResultados.hidden = false;
+// ============================================================================
+// COPIAR PARECER / RELATÓRIO FORMATADO
+// ============================================================================
 
-  if (resultados.length === 0) {
-    estadoVazio.querySelector("p").textContent =
-      "Tente retirar filtros ou usar conceitos jurídicos mais amplos.";
-    estadoVazio.hidden = false;
+async function copiarRelatorioFormatado() {
+  if (!estado.ultimoResultado) return;
+  const dados = estado.ultimoResultado;
+  let markdown = `# Relatório de Jurisprudência — TJSP\n\n`;
+  markdown += `**Tema:** ${dados.tema || pergunta.value.trim()}\n`;
+  markdown += `**Data da consulta:** ${new Date().toLocaleDateString("pt-BR")}\n\n`;
+
+  const processos = dados.processos || dados.decisoes || [];
+  if (processos.length) {
+    markdown += `### Precedentes e Fundamentos Aplicáveis:\n\n`;
+    processos.forEach((p, idx) => {
+      markdown += `#### ${idx + 1}. Processo ${p.processo || "—"} (Acórdão nº ${p.cd_acordao})\n`;
+      if (p.relator) markdown += `- **Relator(a):** ${p.relator}\n`;
+      if (p.orgao_julgador) markdown += `- **Órgão Julgador:** ${p.orgao_julgador}\n`;
+      if (p.data_julgamento) markdown += `- **Data do Julgamento:** ${p.data_julgamento}\n`;
+      if (p.argumento) markdown += `- **Aplicação ao Caso:** ${p.argumento}\n`;
+      if (p.aderencia_fatica) markdown += `- **Similaridade Fática:** ${p.aderencia_fatica}\n`;
+      if (p.ressalva) markdown += `- **Ponto de Atenção:** ${p.ressalva}\n`;
+      if (p.ementa) markdown += `\n> *\"${p.ementa.trim()}\"*\n\n`;
+    });
+  }
+
+  try {
+    await navigator.clipboard.writeText(markdown);
+    if (botaoCopiarRelatorio) {
+      const textoOriginal = botaoCopiarRelatorio.textContent;
+      botaoCopiarRelatorio.textContent = "✓ Parecer copiado!";
+      setTimeout(() => {
+        botaoCopiarRelatorio.textContent = textoOriginal;
+      }, 2500);
+    }
+  } catch {
+    alert("Não foi possível acessar a área de transferência.");
+  }
+}
+
+// ============================================================================
+// FILTROS DINÂMICOS
+// ============================================================================
+
+function renderizarFiltrosDinamicos(decisoes) {
+  if (!barraFiltros || !conteinerChips) return;
+  conteinerChips.replaceChildren();
+  if (!decisoes || decisoes.length < 2) {
+    barraFiltros.hidden = true;
     return;
   }
-  resultados.forEach((resultado, indice) => {
-    listaResultados.append(criarCartaoResultado(resultado, indice + 1));
+
+  const orgaos = [...new Set(decisoes.map((d) => d.orgao_julgador).filter(Boolean))].slice(0, 3);
+  const relatores = [...new Set(decisoes.map((d) => d.relator).filter(Boolean))].slice(0, 3);
+
+  const todos = [
+    { tipo: "todos", rotulo: "Todas as decisões", valor: "" },
+    ...orgaos.map((v) => ({ tipo: "orgao", rotulo: v, valor: v })),
+    ...relatores.map((v) => ({ tipo: "relator", rotulo: `Rel. ${v}`, valor: v })),
+  ];
+
+  todos.forEach((item, idx) => {
+    const chip = criarElemento("button", "chip-filtro", item.rotulo);
+    chip.type = "button";
+    if (idx === 0) chip.classList.add("ativo");
+    chip.addEventListener("click", () => {
+      conteinerChips.querySelectorAll(".chip-filtro").forEach((c) => c.classList.remove("ativo"));
+      chip.classList.add("ativo");
+      aplicarFiltroDinamico(item.tipo, item.valor);
+    });
+    conteinerChips.append(chip);
+  });
+  barraFiltros.hidden = false;
+}
+
+function aplicarFiltroDinamico(tipo, valor) {
+  const cartoes = listaResultados.querySelectorAll(".cartao-resultado");
+  cartoes.forEach((cartao) => {
+    if (tipo === "todos" || !valor) {
+      cartao.hidden = false;
+      return;
+    }
+    const textoCartao = cartao.textContent.toLowerCase();
+    cartao.hidden = !textoCartao.includes(valor.toLowerCase());
   });
 }
 
-function criarCartaoResultado(resultado, numero) {
-  const cartao = criarElemento("article", "cartao-resultado");
-  cartao.append(criarElemento("span", "numero-resultado", String(numero).padStart(2, "0")));
-
-  const conteudo = criarElemento("div");
-  const metadata = resultado.metadata || {};
-  conteudo.append(
-    criarElemento("h3", "", metadata.citacao || `Acórdão ${metadata.cd_acordao || resultado.id}`),
-    criarElemento("p", "ementa-resumo", limitarTexto(resultado.texto || "", 260)),
-  );
-  const metadados = criarElemento("div", "metadados-resultado");
-  const origem = Array.isArray(resultado.origens) ? resultado.origens.join(" + ") : "híbrida";
-  metadados.append(criarElemento("span", "", origem));
-  if (metadata.classe) metadados.append(criarElemento("span", "", metadata.classe));
-  if (metadata.assunto) metadados.append(criarElemento("span", "", metadata.assunto));
-  if (metadata.pagina) metadados.append(criarElemento("span", "", `p. ${metadata.pagina}`));
-  conteudo.append(
-    metadados,
-    criarDetalhesResultado(
-      "Ver trecho completo",
-      criarElemento("p", "ementa-completa", limitarTexto(resultado.texto || "", 1_200)),
-    ),
-  );
-  cartao.append(conteudo);
-
-  const link = criarLinkSeguro(metadata.inteiro_teor_url, "Abrir fonte ↗");
-  if (link) {
-    link.className = "acao-resultado";
-    cartao.append(link);
-  }
-  return cartao;
-}
+// ============================================================================
+// RENDERIZAÇÃO DE RESULTADOS
+// ============================================================================
 
 function renderizarPesquisaAssistida(dados) {
   const processos = Array.isArray(dados.processos) ? dados.processos : [];
   const consultas = Array.isArray(dados.consultas) ? dados.consultas : [];
-  const questoes = Array.isArray(dados.questoes) ? dados.questoes : [];
-  respostaIA.querySelector("header span").textContent = "Estratégia de pesquisa";
   textoResposta.replaceChildren();
-  metricasResposta.replaceChildren();
 
   if (dados.status === "precisa_esclarecimento") {
     atualizarEtapa("esclarecimentos");
-    tituloResultados.textContent = "IA precisa de mais contexto";
+    tituloResultados.textContent = "Dúvidas para refinar a busca";
+    contadorResultados.textContent = `${(dados.questoes || []).length} pontos`;
+    contadorResultados.hidden = false;
     textoResposta.append(
+      criarElemento("h3", "", dados.tema || "Tema em definição"),
       criarElemento(
         "p",
         "",
-        "Responda uma pergunta por vez. Suas respostas formarão o contexto da pesquisa:",
+        "Para encontrar os precedentes mais precisos, responda a estes pontos rápidos:",
       ),
+      criarEntrevistaEsclarecimentos(dados.questoes || []),
     );
-    textoResposta.append(criarEntrevistaEsclarecimentos(questoes));
     respostaIA.hidden = false;
-    contadorResultados.textContent = "Nenhuma consulta feita no TJSP";
-    contadorResultados.hidden = false;
-    renderizarCustoAssistido(dados);
     return;
   }
 
   atualizarEtapa("precedentes");
 
   tituloResultados.textContent =
-    processos.length === 0 ? "Nenhum candidato encontrado" : "Processos sugeridos pela IA";
-  textoResposta.append(
-    criarElemento("h3", "", dados.tema || "Estratégia gerada"),
-    criarElemento(
-      "p",
-      "",
-      "Consultas formuladas pela Maritaca e executadas no CJSG do TJSP:",
-    ),
-  );
-  const listaConsultas = criarElemento("ol", "consultas-assistidas");
-  consultas.forEach((consulta) => {
-    const item = criarElemento("li");
-    item.append(
-      criarElemento("strong", "", consulta.pesquisa || "Consulta"),
-      criarElemento("span", "", consulta.justificativa || ""),
-    );
-    listaConsultas.append(item);
-  });
-  textoResposta.append(listaConsultas);
-  if (dados.analise_parcial) {
-    textoResposta.append(
-      criarElemento(
-        "p",
-        "aviso-analise-parcial",
-        "A resposta da Maritaca atingiu o limite de tokens. Resultados completos foram preservados; itens interrompidos foram descartados.",
-      ),
-    );
-  }
-  respostaIA.hidden = false;
-  renderizarCustoAssistido(dados);
+    processos.length === 0 ? "Nenhum precedente localizado" : "Decisões Selecionadas do TJSP";
 
-  contadorResultados.textContent = `${processos.length} processo${processos.length === 1 ? "" : "s"} ranqueado${processos.length === 1 ? "" : "s"}`;
+  if (consultas.length) {
+    const detalhes = criarElemento("details", "detalhes-resultado");
+    const resumo = criarElemento("summary", "", "🔍 Ver estratégia de busca no tribunal");
+    const listaConsultas = criarElemento("ol", "consultas-assistidas");
+    consultas.forEach((consulta) => {
+      const item = criarElemento("li");
+      item.append(
+        criarElemento("strong", "", consulta.pesquisa || "Consulta"),
+        criarElemento("span", "", consulta.justificativa ? `— ${consulta.justificativa}` : ""),
+      );
+      listaConsultas.append(item);
+    });
+    detalhes.append(resumo, listaConsultas);
+    textoResposta.append(detalhes);
+    respostaIA.hidden = false;
+  }
+
+  contadorResultados.textContent = `${processos.length} acórdão(s) relevante(s)`;
   contadorResultados.hidden = false;
+  if (botaoCopiarRelatorio && processos.length > 0) botaoCopiarRelatorio.hidden = false;
+
   if (processos.length === 0) {
     estadoVazio.querySelector("p").textContent =
-      "A estratégia foi executada, mas nenhuma ementa aderente foi localizada. Acrescente fatos ou ajuste a tese.";
+      "Nenhuma decisão diretamente aderente foi localizada. Tente descrever o caso com termos mais amplos.";
     estadoVazio.hidden = false;
     return;
   }
@@ -387,530 +511,226 @@ function renderizarPesquisaAssistida(dados) {
     .slice(0, Math.min(3, estado.maxImportacao))
     .map((processo) => String(processo.cd_acordao));
   estado.selecionados = new Set(estado.recomendados);
-  processos.forEach((processo, indice) => {
-    listaResultados.append(criarCartaoAssistido(processo, indice + 1));
+
+  processos.forEach((processo) => {
+    listaResultados.append(criarCartaoAssistido(processo));
   });
+
+  renderizarFiltrosDinamicos(processos);
   atualizarSelecao();
   barraImportacao.hidden = false;
 }
 
+function criarCartaoAssistido(decisao) {
+  const cartao = criarElemento("article", "cartao-resultado");
+
+  // Cabeçalho
+  const cabecalho = criarElemento("div", "cabecalho-cartao-resultado");
+  const numProcesso = decisao.processo || `Acórdão nº ${decisao.cd_acordao}`;
+  cabecalho.append(criarElemento("span", "numero-processo", numProcesso));
+
+  const relevancia = decisao.relevancia != null ? Math.round(decisao.relevancia * 100) : null;
+  if (relevancia != null) {
+    cabecalho.append(criarElemento("span", "badge-aderencia", `★ ${relevancia}% aderente ao caso`));
+  }
+  cartao.append(cabecalho);
+
+  // Metadados
+  const metadados = criarElemento("div", "metadados-resultado");
+  [decisao.orgao_julgador, decisao.classe, decisao.data_julgamento ? `Julgado em ${decisao.data_julgamento}` : ""]
+    .filter(Boolean)
+    .forEach((item) => metadados.append(criarElemento("span", "", item)));
+  cartao.append(metadados);
+
+  // Aplicação ao Caso
+  if (decisao.argumento || decisao.aderencia_fatica) {
+    const caixaArgumento = criarElemento("div", "caixa-argumento");
+    caixaArgumento.append(
+      criarElemento("strong", "", "Como este julgado apoia seu caso:"),
+      criarElemento("p", "", decisao.argumento || decisao.aderencia_fatica),
+    );
+    if (decisao.ressalva) {
+      caixaArgumento.append(
+        criarElemento("small", "", `⚠️ Atenção: ${decisao.ressalva}`),
+      );
+    }
+    cartao.append(caixaArgumento);
+  }
+
+  // Ementa
+  const ementa = decisao.ementa || "Ementa não informada.";
+  cartao.append(
+    criarDetalhesResultado(
+      "Ver ementa da decisão",
+      criarElemento("p", "ementa-completa", ementa),
+    ),
+  );
+
+  // Rodapé com Botão de Leitura de PDF
+  const rodape = criarElemento("div", "rodape-cartao");
+  const acoes = criarElemento("div", "acoes-cartao");
+
+  const botaoPDF = criarElemento("button", "botao-ler-pdf", "📄 Ler Decisão Completa");
+  botaoPDF.type = "button";
+  botaoPDF.addEventListener("click", () => {
+    const url = `/documentos/${decisao.cd_acordao}`;
+    abrirVisualizadorPDF(url, `Processo ${decisao.processo || decisao.cd_acordao}`, decisao.orgao_julgador || "");
+  });
+  acoes.append(botaoPDF);
+
+  const linkTJSP = criarLinkSeguro(decisao.inteiro_teor_url, "Ver no TJSP ↗");
+  if (linkTJSP) {
+    linkTJSP.className = "link-tjsp";
+    acoes.append(linkTJSP);
+  }
+
+  rodape.append(acoes);
+  cartao.append(rodape);
+
+  return cartao;
+}
+
 function criarEntrevistaEsclarecimentos(questoes) {
   const entrevista = criarElemento("section", "entrevista-esclarecimentos");
-  const progresso = criarElemento("small", "progresso-entrevista");
-  const historico = criarElemento("div", "historico-entrevista");
-  historico.setAttribute("aria-live", "polite");
   const compositor = criarElemento("form", "compositor-entrevista");
   const rotulo = criarElemento("label", "", "Sua resposta");
   rotulo.htmlFor = "resposta-entrevista";
   const resposta = criarElemento("textarea");
   resposta.id = "resposta-entrevista";
-  resposta.rows = 3;
-  resposta.maxLength = 2_000;
+  resposta.rows = 2;
+  resposta.maxLength = 2000;
   resposta.required = true;
-  resposta.placeholder = "Responda com os fatos relevantes";
+  resposta.placeholder = "Digite aqui para refinar a busca...";
   const botao = criarElemento("button", "botao-principal");
   botao.type = "submit";
-  botao.append(
-    criarElemento("span", "", "Próxima pergunta"),
-    criarElemento("b", "", "→"),
-  );
+  botao.append(criarElemento("span", "", "Continuar pesquisa"), criarElemento("b", "", "→"));
   compositor.append(rotulo, resposta, botao);
-  entrevista.append(progresso, historico, compositor);
+  entrevista.append(compositor);
 
   let indice = 0;
   const respostas = [];
-  adicionarMensagemEntrevista(historico, "ia", questoes[indice]);
-  atualizarEntrevista();
 
-  compositor.addEventListener("submit", (evento) => {
-    evento.preventDefault();
+  function mostrarQuestao() {
+    const questaoAtual = questoes[indice];
+    if (questaoAtual) {
+      rotulo.textContent = questaoAtual;
+      resposta.value = "";
+      resposta.focus();
+    }
+  }
+
+  compositor.addEventListener("submit", (e) => {
+    e.preventDefault();
     const texto = resposta.value.trim();
     if (!texto) return;
-    respostas.push(texto);
-    adicionarMensagemEntrevista(historico, "usuario", texto);
-    resposta.value = "";
-
-    if (indice < questoes.length - 1) {
-      indice += 1;
-      adicionarMensagemEntrevista(historico, "ia", questoes[indice]);
-      atualizarEntrevista();
-      resposta.focus();
-      return;
+    respostas.push({ questao: questoes[indice], resposta: texto });
+    indice += 1;
+    if (indice < questoes.length) {
+      mostrarQuestao();
+    } else {
+      const contextoAtual = formulario.elements.contexto_caso ? formulario.elements.contexto_caso.value.trim() : "";
+      const novoContexto = respostas.map(({ questao: q, resposta: r }) => `${q}: ${r}`).join("\n");
+      if (formulario.elements.contexto_caso) {
+        formulario.elements.contexto_caso.value = contextoAtual ? `${contextoAtual}\n\n${novoContexto}` : novoContexto;
+      }
+      entrevista.replaceChildren(
+        criarElemento("p", "sucesso-entrevista", "✓ Refinamentos aplicados. Reexecutando pesquisa..."),
+      );
+      setTimeout(() => {
+        formulario.dispatchEvent(new Event("submit", { cancelable: true }));
+      }, 500);
     }
-
-    const pares = questoes.map(
-      (questao, posicao) => `Pergunta: ${questao}\nResposta: ${respostas[posicao]}`,
-    );
-    const contextoAnterior = formulario.elements.contexto_caso.value.trim();
-    formulario.elements.contexto_caso.value = [
-      contextoAnterior,
-      "Entrevista de esclarecimento:",
-      ...pares,
-    ]
-      .filter(Boolean)
-      .join("\n\n")
-      .slice(0, 8_000);
-    formulario.requestSubmit();
   });
 
-  function atualizarEntrevista() {
-    progresso.textContent = `Pergunta ${indice + 1} de ${questoes.length}`;
-    botao.querySelector("span").textContent =
-      indice === questoes.length - 1 ? "Concluir e pesquisar" : "Próxima pergunta";
-  }
+  mostrarQuestao();
   return entrevista;
 }
 
-function adicionarMensagemEntrevista(historico, autor, texto) {
-  const mensagem = criarElemento("article", `mensagem-entrevista ${autor}`);
-  mensagem.append(
-    criarElemento("small", "", autor === "ia" ? "Assistente" : "Você"),
-    criarElemento("p", "", texto),
-  );
-  historico.append(mensagem);
-  mensagem.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-function renderizarCustoAssistido(dados) {
-  const custo = dados.custo || {};
-  const auditorias = Array.isArray(dados.auditorias_ia) ? dados.auditorias_ia : [];
-  const itens = [
-    ["Chamadas de IA", auditorias.length],
-    ["Custo estimado", formatarReal(custo.custo_padrao_estimado_brl)],
-    ["Auditorias", auditorias.length ? auditorias.map((id) => `#${id}`).join(", ") : "—"],
-  ];
-  itens.forEach(([rotulo, valor]) => {
-    const grupo = criarElemento("div");
-    grupo.append(criarElemento("dt", "", rotulo), criarElemento("dd", "", valor));
-    metricasResposta.append(grupo);
-  });
-}
-
-function criarCartaoAssistido(decisao, numero) {
-  const cartao = criarElemento("article", "cartao-resultado selecionavel");
-  const seletor = criarElemento("input", "seletor-acordao");
-  seletor.type = "checkbox";
-  seletor.value = String(decisao.cd_acordao);
-  seletor.checked = estado.selecionados.has(seletor.value);
-  seletor.setAttribute("aria-label", `Selecionar acórdão ${decisao.cd_acordao}`);
-  seletor.addEventListener("change", () => alternarSelecao(seletor));
-  cartao.append(
-    seletor,
-    criarElemento("span", "numero-resultado", String(numero).padStart(2, "0")),
-  );
-
-  const conteudo = criarElemento("div");
-  const relevancia = Math.round(Number(decisao.relevancia || 0) * 100);
-  const ementa = decisao.ementa || "Ementa não informada.";
-  conteudo.append(
-    criarElemento(
-      "h3",
-      "",
-      decisao.processo
-        ? `${decisao.processo} · Acórdão ${decisao.cd_acordao}`
-        : `Acórdão ${decisao.cd_acordao}`,
-    ),
-    criarElemento("span", "selo-relevancia", `${relevancia}% de aderência`),
-    criarElemento("p", "ementa-resumo", limitarTexto(ementa, 280)),
-  );
-  const analise = criarElemento("div", "analise-processo");
-  [
-    ["Uso possível", decisao.argumento],
-    ["Aderência fática", decisao.aderencia_fatica],
-    ["Ressalva", decisao.ressalva],
-  ].forEach(([rotulo, texto]) => {
-    if (!texto) return;
-    const bloco = criarElemento("p");
-    bloco.append(criarElemento("strong", "", `${rotulo}: `), document.createTextNode(texto));
-    analise.append(bloco);
-  });
-  const metadados = criarElemento("div", "metadados-resultado");
-  [decisao.classe, decisao.assunto, decisao.orgao_julgador, decisao.data_julgamento]
-    .filter(Boolean)
-    .forEach((item) => metadados.append(criarElemento("span", "", item)));
-  conteudo.append(
-    metadados,
-    criarDetalhesResultado(
-      "Ver ementa e análise",
-      criarElemento("p", "ementa-completa", limitarTexto(ementa, 1_400)),
-      analise,
-    ),
-  );
-  cartao.append(conteudo);
-
-  const link = criarLinkSeguro(decisao.inteiro_teor_url, "Ver no TJSP ↗");
-  if (link) {
-    link.className = "acao-resultado";
-    cartao.append(link);
-  }
-  return cartao;
-}
-
-function renderizarPesquisaTJSP(dados) {
-  const decisoes = Array.isArray(dados.decisoes) ? dados.decisoes : [];
-  atualizarEtapa("precedentes");
-  estado.consultaTJSP = dados.consulta_id;
-  estado.recomendados = decisoes
-    .slice(0, Math.min(3, estado.maxImportacao))
-    .map((decisao) => String(decisao.cd_acordao));
-  estado.selecionados = new Set(estado.recomendados);
-  tituloResultados.textContent =
-    decisoes.length === 0 ? "Nenhuma decisão encontrada no TJSP" : "Resultados no TJSP";
-  contadorResultados.textContent =
-    `${decisoes.length} coletados · ${formatarNumero(dados.total_disponivel)} disponíveis`;
-  contadorResultados.hidden = false;
-
-  if (decisoes.length === 0) {
-    estadoVazio.querySelector("p").textContent =
-      "Tente outros termos ou informe um intervalo de julgamento.";
-    estadoVazio.hidden = false;
-    return;
-  }
-  decisoes.forEach((decisao, indice) => {
-    listaResultados.append(criarCartaoTJSP(decisao, indice + 1));
-  });
-  atualizarSelecao();
-  barraImportacao.hidden = false;
-}
-
-function criarCartaoTJSP(decisao, numero) {
-  const cartao = criarElemento("article", "cartao-resultado selecionavel");
-  const seletor = criarElemento("input", "seletor-acordao");
-  seletor.type = "checkbox";
-  seletor.value = String(decisao.cd_acordao);
-  seletor.checked = estado.selecionados.has(seletor.value);
-  seletor.setAttribute("aria-label", `Selecionar acórdão ${decisao.cd_acordao}`);
-  seletor.addEventListener("change", () => alternarSelecao(seletor));
-  cartao.append(
-    seletor,
-    criarElemento("span", "numero-resultado", String(numero).padStart(2, "0")),
-  );
-
-  const conteudo = criarElemento("div");
-  const ementa = decisao.ementa || "Ementa não informada.";
-  conteudo.append(
-    criarElemento(
-      "h3",
-      "",
-      decisao.processo
-        ? `${decisao.processo} · Acórdão ${decisao.cd_acordao}`
-        : `Acórdão ${decisao.cd_acordao}`,
-    ),
-    criarElemento("p", "ementa-resumo", limitarTexto(ementa, 280)),
-  );
-  const metadados = criarElemento("div", "metadados-resultado");
-  [decisao.classe, decisao.assunto, decisao.orgao_julgador, decisao.data_julgamento]
-    .filter(Boolean)
-    .forEach((item) => metadados.append(criarElemento("span", "", item)));
-  conteudo.append(
-    metadados,
-    criarDetalhesResultado(
-      "Ver ementa completa",
-      criarElemento("p", "ementa-completa", limitarTexto(ementa, 1_400)),
-    ),
-  );
-  cartao.append(conteudo);
-
-  const link = criarLinkSeguro(decisao.inteiro_teor_url, "Ver no TJSP ↗");
-  if (link) {
-    link.className = "acao-resultado";
-    cartao.append(link);
-  }
-  return cartao;
-}
-
 function alternarSelecao(seletor) {
-  estadoErro.hidden = true;
-  if (seletor.checked && estado.selecionados.size >= estado.maxImportacao) {
-    seletor.checked = false;
-    mensagemErro.textContent = `Selecione no máximo ${estado.maxImportacao} acórdãos por importação.`;
-    estadoErro.hidden = false;
-    return;
+  const valor = String(seletor.value);
+  if (seletor.checked) {
+    if (estado.selecionados.size >= estado.maxImportacao) {
+      seletor.checked = false;
+      alert(`Você pode selecionar no máximo ${estado.maxImportacao} acórdãos por vez.`);
+      return;
+    }
+    estado.selecionados.add(valor);
+  } else {
+    estado.selecionados.delete(valor);
   }
-  if (seletor.checked) estado.selecionados.add(seletor.value);
-  else estado.selecionados.delete(seletor.value);
-  atualizarSelecao();
-}
-
-function atualizarSelecao() {
-  const total = estado.selecionados.size;
-  quantidadeSelecionada.textContent =
-    `${total} acórdão${total === 1 ? "" : "s"} selecionado${total === 1 ? "" : "s"} de ${estado.maxImportacao}`;
-  botaoImportar.disabled = total === 0;
-  botaoLimparSelecao.disabled = total === 0;
-  botaoSelecionarRecomendados.disabled = estado.recomendados.every((id) =>
-    estado.selecionados.has(id),
-  );
-}
-
-function sincronizarSeletores() {
-  document.querySelectorAll(".seletor-acordao").forEach((seletor) => {
-    seletor.checked = estado.selecionados.has(seletor.value);
-  });
   atualizarSelecao();
 }
 
 function selecionarRecomendados() {
   estado.selecionados = new Set(estado.recomendados.slice(0, estado.maxImportacao));
-  sincronizarSeletores();
+  atualizarSelecao();
 }
 
 function limparSelecao() {
   estado.selecionados.clear();
-  sincronizarSeletores();
+  atualizarSelecao();
+}
+
+function atualizarSelecao() {
+  const total = estado.selecionados.size;
+  if (quantidadeSelecionada) {
+    quantidadeSelecionada.textContent = `${total} acórdão(s) selecionado(s) de ${estado.maxImportacao}`;
+  }
+  if (botaoImportar) botaoImportar.disabled = total === 0;
 }
 
 async function importarSelecionados() {
   if (!estado.consultaTJSP || estado.selecionados.size === 0) return;
-  atualizarEtapa("importacao");
-  const acordaosImportados = [...estado.selecionados];
-  estadoErro.hidden = true;
-  resultadoImportacao.hidden = true;
+  atualizarEtapa("analise");
   botaoImportar.disabled = true;
-  botaoImportar.querySelector("span").textContent = "Baixando e processando…";
+  resultadoImportacao.hidden = false;
+  resultadoImportacao.replaceChildren(
+    criarElemento("p", "texto-carregando", `Baixando e indexando ${estado.selecionados.size} acórdão(s)...`),
+  );
+
   try {
     const resposta = await fetch("/tjsp/importar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         consulta_id: estado.consultaTJSP,
-        cd_acordaos: acordaosImportados,
+        cd_acordaos: [...estado.selecionados],
       }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(mensagemDaAPI(dados));
-    renderizarImportacao(dados, acordaosImportados);
-    await verificarSaude();
+    resultadoImportacao.replaceChildren(
+      criarElemento("p", "sucesso-entrevista", `✓ ${dados.processados} acórdão(s) prontos para leitura e análise.`),
+    );
   } catch (erro) {
-    exibirErro(
-      erro instanceof Error ? erro.message : "Erro inesperado durante a importação.",
-      "Importação não concluída",
+    resultadoImportacao.replaceChildren(
+      criarElemento("p", "alerta-validacao", erro instanceof Error ? erro.message : "Falha ao baixar acórdãos."),
     );
   } finally {
-    botaoImportar.querySelector("span").textContent = "Importar e indexar";
-    botaoImportar.disabled = estado.selecionados.size === 0;
+    botaoImportar.disabled = false;
   }
-}
-
-function renderizarImportacao(dados, cdAcordaos) {
-  const erros = Array.isArray(dados.erros) ? dados.erros : [];
-  resultadoImportacao.replaceChildren(
-    criarElemento(
-      "h3",
-      "",
-      erros.length === 0 ? "Base local atualizada" : "Importação concluída com ressalvas",
-    ),
-    criarElemento(
-      "p",
-      "",
-      `${dados.processados} PDF(s) processado(s), ${dados.chunks_indexados} trecho(s) indexado(s), ${erros.length} erro(s).`,
-    ),
-  );
-  if (Number(dados.processados) > 0) {
-    atualizarEtapa("analise");
-    const avisoCusto = estado.maxCustoAnaliseDocumentalBrl
-      ? `A análise dos inteiros teores faz uma nova chamada Maritaca, limitada pelo servidor a ${formatarReal(estado.maxCustoAnaliseDocumentalBrl)}.`
-      : "A análise dos inteiros teores faz uma nova chamada Maritaca, sujeita ao teto configurado no servidor.";
-    resultadoImportacao.append(
-      criarElemento(
-        "p",
-        "aviso-custo-analise",
-        avisoCusto,
-      ),
-    );
-    const botaoAnalisar = criarElemento("button", "botao-principal botao-analisar");
-    botaoAnalisar.type = "button";
-    botaoAnalisar.append(
-      criarElemento("span", "", "Analisar PDFs com IA"),
-      criarElemento("b", "", "→"),
-    );
-    botaoAnalisar.addEventListener("click", () =>
-      analisarDocumentosImportados(cdAcordaos, botaoAnalisar),
-    );
-    resultadoImportacao.append(botaoAnalisar);
-  }
-  resultadoImportacao.hidden = false;
-  tituloResultados.textContent = "Importação concluída";
-}
-
-async function analisarDocumentosImportados(cdAcordaos, botao) {
-  atualizarEtapa("analise");
-  estadoErro.hidden = true;
-  botao.disabled = true;
-  botao.querySelector("span").textContent = "Analisando inteiros teores…";
-  try {
-    const resposta = await fetch("/tjsp/analisar-documentos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pergunta: pergunta.value.trim(),
-        contexto_caso: formulario.elements.contexto_caso.value.trim(),
-        cd_acordaos: cdAcordaos,
-      }),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(mensagemDaAPI(dados));
-    renderizarAnaliseDocumental(dados);
-    await carregarAuditorias();
-  } catch (erro) {
-    exibirErro(
-      erro instanceof Error ? erro.message : "Erro durante análise dos documentos.",
-      "Análise não concluída",
-    );
-  } finally {
-    botao.querySelector("span").textContent = "Analisar PDFs com IA";
-    botao.disabled = false;
-  }
-}
-
-function renderizarAnaliseDocumental(dados) {
-  atualizarEtapa("analise", true);
-  const validacao = dados.validacao || {};
-  tituloResultados.textContent = "Argumentos encontrados nos inteiros teores";
-  respostaIA.querySelector("header span").textContent = "Análise documental validada";
-  contadorResultados.textContent =
-    `Auditoria #${dados.auditoria_id} · ${validacao.aprovada ? "referências verificadas" : "revisão necessária"}`;
-  contadorResultados.hidden = false;
-  textoResposta.replaceChildren();
-  if (!validacao.aprovada) {
-    textoResposta.append(
-      criarElemento(
-        "p",
-        "alerta-validacao",
-        "A resposta contém citação ou referência que não foi confirmada nos trechos recuperados. Revise antes de utilizar.",
-      ),
-    );
-  }
-  adicionarTextoComCitacoes(textoResposta, dados.texto || "", dados.fontes || []);
-  renderizarMetricas(dados);
-  respostaIA.hidden = false;
-  renderizarFontes(dados.fontes || []);
-  respostaIA.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function renderizarResposta(dados) {
-  tituloResultados.textContent = "Resposta e fundamentos";
-  respostaIA.querySelector("header span").textContent = "Resposta fundamentada";
-  contadorResultados.textContent = `Auditoria #${dados.auditoria_id}`;
-  contadorResultados.hidden = false;
-  textoResposta.replaceChildren();
-  adicionarTextoComCitacoes(textoResposta, dados.texto || "", dados.fontes || []);
-  renderizarMetricas(dados);
-  respostaIA.hidden = false;
-  renderizarFontes(dados.fontes || []);
-}
-
-function adicionarTextoComCitacoes(conteiner, texto, fontes) {
-  const expressao = /\[Fonte\s+(\d+)\]/gi;
-  let inicio = 0;
-  let ocorrencia;
-  while ((ocorrencia = expressao.exec(texto)) !== null) {
-    conteiner.append(document.createTextNode(texto.slice(inicio, ocorrencia.index)));
-    const numero = Number(ocorrencia[1]);
-    const fonteExiste = fontes.some((fonte) => Number(fonte.numero) === numero);
-    if (fonteExiste) {
-      const link = criarElemento("a", "", ocorrencia[0]);
-      link.href = `#fonte-${numero}`;
-      link.setAttribute("aria-label", `Ir para a fonte ${numero}`);
-      conteiner.append(link);
-    } else {
-      conteiner.append(document.createTextNode(ocorrencia[0]));
-    }
-    inicio = expressao.lastIndex;
-  }
-  conteiner.append(document.createTextNode(texto.slice(inicio)));
-}
-
-function renderizarMetricas(dados) {
-  metricasResposta.replaceChildren();
-  const custo = dados.custo || {};
-  const itens = [
-    ["Modelo", dados.modelo || "—"],
-    ["Tokens", formatarNumero(dados.tokens_total)],
-    ["Duração", dados.duracao_ms == null ? "—" : `${formatarNumero(dados.duracao_ms)} ms`],
-    ["Custo estimado", formatarReal(custo.custo_padrao_estimado_brl)],
-  ];
-  itens.forEach(([rotulo, valor]) => {
-    const grupo = criarElemento("div");
-    grupo.append(criarElemento("dt", "", rotulo), criarElemento("dd", "", valor));
-    metricasResposta.append(grupo);
-  });
-}
-
-function renderizarFontes(fontes) {
-  gradeFontes.replaceChildren();
-  quantidadeFontes.textContent = `${fontes.length} fonte${fontes.length === 1 ? "" : "s"}`;
-  fontes.forEach((fonte) => {
-    const cartao = criarElemento("article", "cartao-fonte");
-    cartao.id = `fonte-${fonte.numero}`;
-    cartao.append(
-      criarElemento("span", "rotulo-fonte", `Fonte ${fonte.numero}`),
-      criarElemento("h4", "", fonte.citacao || fonte.id),
-      criarElemento("p", "", limitarTexto(fonte.texto || "", 360)),
-    );
-    if (fonte.arquivo) {
-      cartao.append(criarElemento("small", "arquivo-fonte", fonte.arquivo));
-    }
-    const destinoLocal = fonte.pagina
-      ? `${fonte.url}#page=${Number(fonte.pagina)}`
-      : fonte.url;
-    const link = criarLinkSeguro(destinoLocal, "Abrir PDF na fonte ↗");
-    if (link) cartao.append(link);
-    const oficial = criarLinkSeguro(fonte.url_oficial, "Ver original no TJSP ↗");
-    if (oficial) cartao.append(oficial);
-    gradeFontes.append(cartao);
-  });
-  fontesResposta.hidden = fontes.length === 0;
 }
 
 async function carregarAuditorias() {
-  botaoAuditorias.disabled = true;
+  if (!listaAuditorias) return;
   try {
     const resposta = await fetch("/auditorias?limite=5");
     const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(mensagemDaAPI(dados));
-    renderizarAuditorias(Array.isArray(dados) ? dados : []);
-  } catch (_erro) {
-    listaAuditorias.replaceChildren(
-      criarElemento("p", "texto-suave", "Histórico indisponível no momento."),
-    );
-  } finally {
-    botaoAuditorias.disabled = false;
-  }
+    if (!resposta.ok) return;
+    const auditorias = Array.isArray(dados) ? dados : [];
+    listaAuditorias.replaceChildren();
+    if (auditorias.length === 0) {
+      listaAuditorias.append(criarElemento("p", "texto-suave", "Nenhuma consulta realizada ainda."));
+      return;
+    }
+    auditorias.forEach((a) => {
+      const item = criarElemento("div", "chip-historico", limitarTexto(a.pergunta || "Pesquisa", 60));
+      listaAuditorias.append(item);
+    });
+  } catch {}
 }
 
-function renderizarAuditorias(auditorias) {
-  listaAuditorias.replaceChildren();
-  if (auditorias.length === 0) {
-    listaAuditorias.append(
-      criarElemento("p", "texto-suave", "Nenhuma chamada de IA registrada."),
-    );
-    return;
-  }
-  auditorias.forEach((auditoria) => {
-    const item = criarElemento("article", "item-auditoria");
-    const status = criarElemento("span", "selo-status", auditoria.status || "—");
-    if (auditoria.status === "erro") status.classList.add("erro");
-    const centro = criarElemento("div");
-    centro.append(
-      criarElemento("p", "", limitarTexto(auditoria.pergunta || "Sem pergunta", 120)),
-      criarElemento(
-        "span",
-        "",
-        `#${auditoria.id} · ${auditoria.modelo || "modelo não informado"}`,
-      ),
-    );
-    const detalhes = criarElemento("div", "detalhes-auditoria");
-    detalhes.append(
-      criarElemento("strong", "", `${formatarNumero(auditoria.tokens_total)} tokens`),
-      criarElemento("span", "", formatarData(auditoria.criado_em)),
-    );
-    item.append(status, centro, detalhes);
-    listaAuditorias.append(item);
-  });
-}
-
-function exibirErro(mensagem, titulo = "A consulta não foi concluída") {
+function exibirErro(mensagem, titulo = "Não foi possível concluir a pesquisa") {
   tituloResultados.textContent = titulo;
   mensagemErro.textContent = mensagem;
   estadoErro.hidden = false;
@@ -926,16 +746,9 @@ function focarResultados() {
 function mensagemDaAPI(dados) {
   const detalhe = dados && dados.detail;
   if (typeof detalhe === "string") return detalhe;
-  if (detalhe && typeof detalhe.erro === "string") {
-    const valores = [];
-    if (detalhe.estimativa_maxima_brl != null) {
-      valores.push(`estimativa ${formatarReal(detalhe.estimativa_maxima_brl)}`);
-    }
-    if (detalhe.limite_brl != null) valores.push(`limite ${formatarReal(detalhe.limite_brl)}`);
-    return `${detalhe.erro}${valores.length ? ` (${valores.join("; ")})` : ""}`;
-  }
+  if (detalhe && typeof detalhe.erro === "string") return detalhe.erro;
   if (Array.isArray(detalhe) && detalhe[0] && detalhe[0].msg) return detalhe[0].msg;
-  return "A API devolveu uma resposta inesperada.";
+  return "O servidor retornou uma resposta inesperada.";
 }
 
 function criarElemento(tag, classe = "", texto = "") {
@@ -949,9 +762,6 @@ function criarDetalhesResultado(rotulo, ...conteudos) {
   const detalhes = criarElemento("details", "detalhes-resultado");
   const resumo = criarElemento("summary", "", rotulo);
   detalhes.append(resumo, ...conteudos);
-  detalhes.addEventListener("toggle", () => {
-    resumo.textContent = detalhes.open ? "Ocultar detalhes" : rotulo;
-  });
   return detalhes;
 }
 
@@ -965,7 +775,7 @@ function criarLinkSeguro(url, texto) {
     link.target = "_blank";
     link.rel = "noreferrer";
     return link;
-  } catch (_erro) {
+  } catch {
     return null;
   }
 }
@@ -973,33 +783,4 @@ function criarLinkSeguro(url, texto) {
 function limitarTexto(texto, limite) {
   const limpo = String(texto).replace(/\s+/g, " ").trim();
   return limpo.length > limite ? `${limpo.slice(0, limite).trim()}…` : limpo;
-}
-
-function formatarNumero(valor) {
-  return valor == null ? "—" : new Intl.NumberFormat("pt-BR").format(valor);
-}
-
-function formatarReal(valor) {
-  return valor == null
-    ? "—"
-    : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor);
-}
-
-function formatarData(valor) {
-  if (!valor) return "—";
-  const data = new Date(String(valor).replace(" ", "T") + "Z");
-  return Number.isNaN(data.getTime())
-    ? String(valor)
-    : new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(data);
-}
-
-function converterDataBR(valor) {
-  if (!valor) return "";
-  const [ano, mes, dia] = valor.split("-");
-  return ano && mes && dia ? `${dia}/${mes}/${ano}` : valor;
 }

@@ -37,12 +37,26 @@ class ServicoColetaTJSP:
         self.max_pdfs = max_pdfs
         self._bloqueio = Lock()
 
-    def pesquisar(self, consulta: Consulta, *, paginas: int = 1) -> dict:
+    def pesquisar(
+        self,
+        consulta: Consulta,
+        *,
+        paginas: int = 1,
+        tribunal: str | None = None,
+    ) -> dict:
         consulta.validar()
         if not 1 <= paginas <= self.max_paginas:
             raise ValueError(f"Páginas deve ficar entre 1 e {self.max_paginas}.")
         with self._bloqueio:
-            resultado = self.cliente.pesquisar(consulta, max_paginas=paginas)
+            trib_alvo = tribunal.lower().strip() if tribunal else getattr(self.cliente, "tribunal", "tjsp")
+            if trib_alvo != getattr(self.cliente, "tribunal", "tjsp"):
+                cliente_trib = TJSPClient(
+                    tribunal=trib_alvo,
+                    intervalo=self.cliente._limitador.intervalo,
+                )
+                resultado = cliente_trib.pesquisar(consulta, max_paginas=paginas)
+            else:
+                resultado = self.cliente.pesquisar(consulta, max_paginas=paginas)
         consulta_id = self.repositorio.salvar_pesquisa(consulta, resultado)
         ementas_indexadas = self.repositorio_ementas.indexar_decisoes(
             resultado.decisoes

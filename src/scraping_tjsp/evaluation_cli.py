@@ -12,11 +12,13 @@ from .evaluation import AvaliadorJuridico, JuizJuridicoIA, carregar_casos
 from .maritaca import ErroMaritaca, ProvedorMaritaca
 from .rag import PacoteContextoIA, PreparadorContextoIA, RespostaIA
 from .search import BuscaHibrida
+from .settings import get_settings
 from .storage import RepositorioSQLite
 from .vector_store import MODELO_EMBEDDING_PADRAO, RepositorioChunksChroma
 
 
 def construir_parser() -> argparse.ArgumentParser:
+    cfg = get_settings()
     parser = argparse.ArgumentParser(
         prog="tjsp-avaliar",
         description="Avalia recuperação, citações e respostas jurídicas do pipeline.",
@@ -30,8 +32,8 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--limite", type=int, default=6)
     parser.add_argument("--max-caracteres", type=int, default=12_000)
-    parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
-    parser.add_argument("--chroma-path", type=Path, default=Path("data/chroma"))
+    parser.add_argument("--sqlite-path", type=Path, default=cfg.sqlite_path)
+    parser.add_argument("--chroma-path", type=Path, default=cfg.chroma_path)
     parser.add_argument("--embedding-model", default=MODELO_EMBEDDING_PADRAO)
     parser.add_argument("--saida", type=Path, default=Path("output/avaliacao.json"))
     parser.add_argument(

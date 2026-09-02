@@ -9,26 +9,30 @@ from .dataset import PreparadorDataset, carregar_fontes_dataset
 from .downloader import PDFDownloader
 from .evaluation_cli import main as avaliar
 from .processor import ProcessadorPDF
+from .settings import get_settings
 from .storage import RepositorioSQLite
 from .vector_store import MODELO_EMBEDDING_PADRAO, RepositorioChunksChroma
 
 
 def construir_parser() -> argparse.ArgumentParser:
+    cfg = get_settings()
     parser = argparse.ArgumentParser(
         prog="tjsp-preparar-dataset",
         description="Baixa, processa, indexa e avalia fontes exatas de um dataset.",
     )
     parser.add_argument("dataset", type=Path, help="Dataset jurídico em JSONL.")
-    parser.add_argument("--intervalo", type=float, default=2.0)
+    parser.add_argument("--intervalo", type=float, default=cfg.intervalo_tjsp)
     parser.add_argument("--max-fontes", type=int, default=None)
-    parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
-    parser.add_argument("--chroma-path", type=Path, default=Path("data/chroma"))
+    parser.add_argument("--sqlite-path", type=Path, default=cfg.sqlite_path)
+    parser.add_argument("--chroma-path", type=Path, default=cfg.chroma_path)
     parser.add_argument("--embedding-model", default=MODELO_EMBEDDING_PADRAO)
-    parser.add_argument("--diretorio-pdfs", type=Path, default=Path("data/pdfs"))
-    parser.add_argument("--max-mb-pdf", type=int, default=50)
+    parser.add_argument("--diretorio-pdfs", type=Path, default=cfg.diretorio_pdfs)
+    parser.add_argument("--max-mb-pdf", type=int, default=cfg.max_mb_pdf)
     parser.add_argument("--sem-ocr", action="store_true")
-    parser.add_argument("--tamanho-chunk", type=int, default=1500)
-    parser.add_argument("--sobreposicao-chunk", type=int, default=200)
+    parser.add_argument("--tamanho-chunk", type=int, default=cfg.tamanho_chunk)
+    parser.add_argument(
+        "--sobreposicao-chunk", type=int, default=cfg.sobreposicao_chunk
+    )
     parser.add_argument(
         "--sem-avaliacao",
         action="store_true",

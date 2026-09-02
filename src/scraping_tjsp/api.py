@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +10,7 @@ from typing import Literal, Protocol
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from requests import RequestException
@@ -18,7 +20,7 @@ from .assisted_research import (
     LimiteCustoPesquisa,
     PesquisaAssistidaTJSP,
 )
-from .client import TJSPClient
+from .client import TRIBUNAIS_CONFIG, TJSPClient
 from .cost import PrecosTokens, estimar_custo_maximo, resumir_custo
 from .document_analysis import (
     AnaliseDocumentalTJSP,
@@ -30,8 +32,9 @@ from .ingestion import ServicoColetaTJSP
 from .maritaca import ErroMaritaca, ProvedorMaritaca
 from .models import Consulta
 from .processor import ProcessadorPDF
-from .rag import PreparadorContextoIA, ProvedorIA
+from .rag import PacoteContextoIA, PreparadorContextoIA, ProvedorIA
 from .search import BuscaHibrida
+from .settings import Settings
 from .storage import RepositorioSQLite
 from .vector_store import RepositorioChroma, RepositorioChunksChroma
 
@@ -77,25 +80,20 @@ class ConfiguracaoAPI:
 
     @classmethod
     def do_ambiente(cls) -> ConfiguracaoAPI:
+        s = Settings.carregar()
         return cls(
-            sqlite_path=Path(os.environ.get("TJSP_SQLITE_PATH", "data/tjsp.sqlite3")),
-            chroma_path=Path(os.environ.get("TJSP_CHROMA_PATH", "data/chroma")),
-            max_custo_brl=_float_ambiente("TJSP_API_MAX_CUSTO_BRL", 0.10),
-            max_output_tokens=_int_ambiente("TJSP_API_MAX_OUTPUT_TOKENS", 2_000),
-            diretorio_pdfs=Path(os.environ.get("TJSP_DIRETORIO_PDFS", "data/pdfs")),
-            intervalo_tjsp=_float_ambiente("TJSP_API_INTERVALO_TJSP", 2.0),
-            max_paginas_tjsp=_int_ambiente("TJSP_API_MAX_PAGINAS_TJSP", 1),
-            max_importacao_pdfs=_int_ambiente("TJSP_API_MAX_IMPORTACAO_PDFS", 5),
-            max_mb_pdf=_int_ambiente("TJSP_API_MAX_MB_PDF", 50),
-            habilitar_ocr=_bool_ambiente("TJSP_API_HABILITAR_OCR", True),
-            max_custo_pesquisa_assistida_brl=_float_ambiente(
-                "TJSP_API_MAX_CUSTO_PESQUISA_BRL",
-                0.20,
-            ),
-            max_custo_analise_documental_brl=_float_ambiente(
-                "TJSP_API_MAX_CUSTO_ANALISE_BRL",
-                0.20,
-            ),
+            sqlite_path=s.sqlite_path,
+            chroma_path=s.chroma_path,
+            max_custo_brl=s.max_custo_brl,
+            max_output_tokens=s.max_output_tokens,
+            diretorio_pdfs=s.diretorio_pdfs,
+            intervalo_tjsp=s.intervalo_tjsp,
+            max_paginas_tjsp=s.max_paginas_tjsp,
+            max_importacao_pdfs=s.max_importacao_pdfs,
+            max_mb_pdf=s.max_mb_pdf,
+            habilitar_ocr=s.habilitar_ocr,
+            max_custo_pesquisa_assistida_brl=s.max_custo_pesquisa_assistida_brl,
+            max_custo_analise_documental_brl=s.max_custo_analise_documental_brl,
         )
 
 
@@ -162,12 +160,13 @@ class RequisicaoImportacaoTJSP(BaseModel):
 
 
 class RequisicaoPesquisaAssistida(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
-    pergunta: str = Field(min_length=5, max_length=2_000)
+    pergunta: str = Field(min_length=1, max_length=2_000)
     contexto_caso: str = Field(default="", max_length=8_000)
     modelo: str | None = Field(default=None, min_length=1, max_length=100)
     max_custo_brl: float | None = Field(default=None, gt=0)
+    tribunal: str = Field(default="todos", max_length=20)
 
 
 class RequisicaoAnaliseDocumental(BaseModel):
@@ -180,10 +179,22 @@ class RequisicaoAnaliseDocumental(BaseModel):
     max_custo_brl: float | None = Field(default=None, gt=0)
 
 
+class RequisicaoMinuta(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    tema: str = Field(default="", max_length=2_000)
+    pergunta: str = Field(min_length=3, max_length=4_000)
+    contexto_caso: str = Field(default="", max_length=8_000)
+    acordaos_selecionados: list[dict] = Field(default_factory=list)
+    instrucao: str = Field(default="", max_length=2_000)
+    historico_chat: list[dict] = Field(default_factory=list)
+
+
 def criar_app(
     *,
     configuracao: ConfiguracaoAPI | None = None,
     repositorio: RepositorioSQLite | None = None,
+    repositorio_chunks: RepositorioChunksChroma | None = None,
     busca: BuscaHibrida | None = None,
     provedor_factory: ProvedorFactory | None = None,
     servico_tjsp: ServicoColetaTJSP | None = None,
@@ -194,9 +205,10 @@ def criar_app(
     config = configuracao or ConfiguracaoAPI.do_ambiente()
     sqlite = repositorio or RepositorioSQLite(config.sqlite_path)
     sqlite.inicializar()
-    repositorio_chunks = None
     if busca is None:
-        repositorio_chunks = RepositorioChunksChroma(config.chroma_path)
+        repositorio_chunks = repositorio_chunks or RepositorioChunksChroma(
+            config.chroma_path
+        )
         busca_hibrida = BuscaHibrida(sqlite, repositorio_chunks)
     else:
         busca_hibrida = busca
@@ -236,9 +248,9 @@ def criar_app(
     precos = PrecosTokens()
 
     app = FastAPI(
-        title="Scraping TJSP API",
-        version="0.2.0",
-        description="Busca híbrida e respostas rastreáveis sobre jurisprudência do TJSP.",
+        title="TJSP Jurisprudência API",
+        version="0.1.0",
+        description="API para pesquisa jurisprudencial no TJSP e RAG jurídico com Maritaca AI.",
     )
     app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 
@@ -249,8 +261,31 @@ def criar_app(
     @app.get("/saude", tags=["sistema"])
     def saude() -> dict:
         contagens = sqlite.contagens_processamento()
+        tesseract_disponivel = bool(shutil.which("tesseract"))
+
+        sqlite_ok = True
+        try:
+            with sqlite._conectar() as conn:
+                modo_journal = str(
+                    conn.execute("PRAGMA journal_mode").fetchone()[0]
+                ).lower()
+        except Exception:
+            sqlite_ok = False
+            modo_journal = "indisponivel"
+
+        chroma_ok = True
+        total_chunks = 0
+        if repositorio_chunks is not None:
+            try:
+                total_chunks = repositorio_chunks.colecao.count()
+            except Exception:
+                chroma_ok = False
+
+        chave_maritaca = bool(os.environ.get("MARITACA_API_KEY", "").strip())
+        status_geral = "ok" if (sqlite_ok and chroma_ok) else "atencao"
+
         return {
-            "status": "ok",
+            "status": status_geral,
             "provedor_ia": "maritaca",
             "max_custo_brl": config.max_custo_brl,
             "max_output_tokens": config.max_output_tokens,
@@ -264,6 +299,27 @@ def criar_app(
             "max_custo_analise_documental_brl": (
                 config.max_custo_analise_documental_brl
             ),
+            "diagnosticos": {
+                "sqlite": {
+                    "status": "ok" if sqlite_ok else "erro",
+                    "caminho": str(config.sqlite_path),
+                    "journal_mode": modo_journal,
+                    "contagens": contagens,
+                },
+                "chroma": {
+                    "status": "ok" if chroma_ok else "erro",
+                    "caminho": str(config.chroma_path),
+                    "total_chunks": total_chunks,
+                },
+                "maritaca": {
+                    "configurada": chave_maritaca,
+                    "modelo": os.environ.get("MARITACA_MODEL", "sabia-4"),
+                },
+                "tesseract_ocr": {
+                    "disponivel": tesseract_disponivel,
+                    "habilitado": config.habilitar_ocr,
+                },
+            },
         }
 
     @app.get("/documentos/{cd_acordao}", tags=["documentos"])
@@ -369,6 +425,7 @@ def criar_app(
                 contexto_caso=requisicao.contexto_caso,
                 modelo=requisicao.modelo,
                 max_custo_brl=limite,
+                tribunal=requisicao.tribunal,
             )
         except LimiteCustoPesquisa as exc:
             raise HTTPException(
@@ -389,8 +446,63 @@ def criar_app(
         except RequestException as exc:
             raise HTTPException(
                 status_code=502,
-                detail=f"Falha ao consultar o TJSP: {exc}",
+                detail=f"Falha ao consultar o tribunal ({requisicao.tribunal.upper()}): {exc}",
             ) from exc
+
+    @app.get("/tribunais", tags=["tribunais"])
+    def listar_tribunais() -> list[dict]:
+        return [
+            {
+                "codigo": codigo,
+                "sigla": info["sigla"],
+                "nome": info["nome"],
+                "uf": info["uf"],
+                "ativo": True,
+            }
+            for codigo, info in TRIBUNAIS_CONFIG.items()
+        ]
+
+    @app.post(
+        "/tjsp/pesquisa-assistida/stream",
+        tags=["inteligencia-artificial", "coleta-tjsp"],
+    )
+    def pesquisar_tjsp_com_ia_stream(requisicao: RequisicaoPesquisaAssistida):
+        limite = requisicao.max_custo_brl or config.max_custo_pesquisa_assistida_brl
+        if limite > config.max_custo_pesquisa_assistida_brl:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "max_custo_brl excede o limite da pesquisa assistida "
+                    f"({config.max_custo_pesquisa_assistida_brl})."
+                ),
+            )
+
+        def gerador_eventos():
+            try:
+                for evento in pesquisa_com_ia.pesquisar_stream(
+                    requisicao.pergunta,
+                    contexto_caso=requisicao.contexto_caso,
+                    modelo=requisicao.modelo,
+                    max_custo_brl=limite,
+                    tribunal=requisicao.tribunal,
+                ):
+                    yield f"data: {json.dumps(evento, ensure_ascii=False)}\n\n"
+            except Exception as exc:
+                erro_payload = json.dumps(
+                    {"tipo": "erro", "erro": str(exc)},
+                    ensure_ascii=False,
+                )
+                yield f"data: {erro_payload}\n\n"
+
+        return StreamingResponse(
+            gerador_eventos(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.post(
         "/tjsp/analisar-documentos",
@@ -430,6 +542,106 @@ def criar_app(
             raise HTTPException(status_code=status, detail=str(exc)) from exc
         except ErroAnaliseDocumental as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/tjsp/gerar-minuta", tags=["tjsp"])
+    def gerar_minuta(requisicao: RequisicaoMinuta) -> dict:
+        tema = requisicao.tema or requisicao.pergunta
+        acordaos = requisicao.acordaos_selecionados
+        instrucao = requisicao.instrucao.strip()
+
+        resumo_acordaos = []
+        for a in acordaos:
+            proc = a.get("processo") or f"Acórdão {a.get('cd_acordao', '')}"
+            rel = a.get("relator") or "Relator não informado"
+            orgao = a.get("orgao_julgador") or "TJSP"
+            dt = a.get("data_julgamento") or ""
+            ementa = a.get("ementa") or ""
+            arg = a.get("argumento") or a.get("aderencia_fatica") or ""
+            resumo_acordaos.append(
+                f"- Processo: {proc} | Órgão: {orgao} | Relator: {rel} | Julgamento: {dt}\n"
+                f"  Aplicação: {arg}\n"
+                f"  Ementa: {ementa[:400]}"
+            )
+        texto_precedentes = "\n\n".join(resumo_acordaos)
+
+        chave = os.getenv("MARITACA_API_KEY")
+        if chave:
+            try:
+                provedor = criar_provedor(None, 2000)
+                prompt_sistema = (
+                    "Você é um especialista em redação de peças processuais e teses jurídicas para o Tribunal de Justiça de São Paulo (TJSP).\n"
+                    "Redija uma fundamentação jurídica formal, assertiva e bem estruturada para inclusão direta em petição.\n"
+                    "Estrutura recomendada:\n"
+                    "# EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO...\n\n"
+                    "## I. DOS FATOS RELEVANTES E DO CONTEXTO\n"
+                    "## II. DA JURISPRUDÊNCIA FIRME DO TJSP (PRECEDENTES APLICÁVEIS)\n"
+                    "## III. DA FUNDAMENTAÇÃO E APLICAÇÃO AO CASO CONCRETO\n"
+                    "## IV. DOS PEDIDOS E REQUERIMENTOS\n\n"
+                    f"Tema: {tema}\n"
+                    f"Fatos / Consulta: {requisicao.pergunta}\n"
+                    f"Detalhes do caso: {requisicao.contexto_caso}\n\n"
+                    f"Precedentes do TJSP Selecionados:\n{texto_precedentes}\n\n"
+                )
+                if instrucao:
+                    prompt_sistema += f"\nInstruções de Ajuste do Advogado: {instrucao}\n"
+
+                pacote = PacoteContextoIA(
+                    instrucoes_sistema=prompt_sistema,
+                    mensagem_usuario=f"Redija a minuta de fundamentação jurídica com base nos acórdãos: {tema}",
+                )
+                resposta_ia = provedor.responder(pacote)
+                return {
+                    "minuta": resposta_ia.texto,
+                    "tema": tema,
+                    "acordaos_utilizados": len(acordaos),
+                }
+            except Exception:
+                pass
+
+        # Fallback local estruturado
+        linhas = [
+            f"# MINUTA DE FUNDAMENTAÇÃO JURÍDICA — {tema.upper()}",
+            "",
+            "## I. DO CONTEXTO FÁTICO",
+            requisicao.contexto_caso or requisicao.pergunta,
+            "",
+            "## II. DA JURISPRUDÊNCIA PACÍFICA DO TRIBUNAL DE JUSTIÇA DE SÃO PAULO",
+            "A pretensão formulada encontra integral acolhimento na iterativa jurisprudência desta Egrégia Corte bandeirante:",
+            "",
+        ]
+        for idx, a in enumerate(acordaos, 1):
+            proc = a.get("processo") or f"Acórdão nº {a.get('cd_acordao', '')}"
+            rel = a.get("relator") or "Relator designado"
+            orgao = a.get("orgao_julgador") or "Tribunal de Justiça de São Paulo"
+            dt = f", j. em {a.get('data_julgamento')}" if a.get("data_julgamento") else ""
+            ementa = a.get("ementa", "").strip()
+            arg = a.get("argumento") or a.get("aderencia_fatica") or ""
+
+            linhas.append(f"### {idx}. {proc} — {orgao}")
+            if rel:
+                linhas.append(f"**Relator(a):** {rel}{dt}")
+            if arg:
+                linhas.append(f"**Tese Aplicável:** {arg}")
+            if ementa:
+                linhas.append(f"\n> *\"{ementa}\"*\n")
+
+        linhas.extend([
+            "## III. DA SUBSUNÇÃO FÁTICA E DO DIREITO",
+            f"Como se extrai dos precedentes colacionados, a jurisprudência do TJSP é uníssona em acolher o pleito ora formulado quanto ao tema '{tema}', sendo manifesto o direito da parte requerente.",
+            "",
+            "## IV. DOS PEDIDOS",
+            "Ante o exposto, requer-se o acolhimento integral da tese com base na iterativa jurisprudência desta Corte.",
+        ])
+
+        if instrucao:
+            linhas.extend(["", f"*(Ajuste solicitado pelo advogado: {instrucao})*"])
+
+        return {
+            "minuta": "\n".join(linhas),
+            "tema": tema,
+            "acordaos_utilizados": len(acordaos),
+        }
+
 
     @app.post("/perguntar", tags=["inteligencia-artificial"])
     def perguntar(requisicao: RequisicaoPergunta) -> dict:
@@ -561,31 +773,3 @@ def _criar_provedor_maritaca(
         modelo=modelo,
         max_output_tokens=max_output_tokens,
     )
-
-
-def _float_ambiente(nome: str, padrao: float) -> float:
-    valor = os.environ.get(nome)
-    try:
-        return float(valor) if valor is not None else padrao
-    except ValueError as exc:
-        raise ValueError(f"{nome} deve ser numérico.") from exc
-
-
-def _int_ambiente(nome: str, padrao: int) -> int:
-    valor = os.environ.get(nome)
-    try:
-        return int(valor) if valor is not None else padrao
-    except ValueError as exc:
-        raise ValueError(f"{nome} deve ser inteiro.") from exc
-
-
-def _bool_ambiente(nome: str, padrao: bool) -> bool:
-    valor = os.environ.get(nome)
-    if valor is None:
-        return padrao
-    normalizado = valor.strip().casefold()
-    if normalizado in {"1", "true", "sim", "yes", "on"}:
-        return True
-    if normalizado in {"0", "false", "nao", "não", "no", "off"}:
-        return False
-    raise ValueError(f"{nome} deve ser booleano.")

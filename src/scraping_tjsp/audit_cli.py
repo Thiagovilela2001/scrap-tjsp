@@ -5,17 +5,19 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from .settings import get_settings
 from .storage import RepositorioSQLite
 
 
 def construir_parser() -> argparse.ArgumentParser:
+    cfg = get_settings()
     parser = argparse.ArgumentParser(
         prog="tjsp-auditoria",
         description="Consulta a trilha SQLite das chamadas de inteligência artificial.",
     )
     parser.add_argument("execucao_id", nargs="?", type=int)
     parser.add_argument("--limite", type=int, default=20)
-    parser.add_argument("--sqlite-path", type=Path, default=Path("data/tjsp.sqlite3"))
+    parser.add_argument("--sqlite-path", type=Path, default=cfg.sqlite_path)
     parser.add_argument("--json", action="store_true")
     return parser
 

@@ -37,7 +37,7 @@ class ServicoColetaFalso:
     def __init__(self) -> None:
         self.consultas = []
 
-    def pesquisar(self, consulta, *, paginas):
+    def pesquisar(self, consulta, *, paginas, **kwargs):
         self.consultas.append(consulta.pesquisa)
         indice = len(self.consultas)
         decisoes = (

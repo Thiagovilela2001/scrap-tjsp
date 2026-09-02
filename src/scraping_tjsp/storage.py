@@ -17,14 +17,17 @@ from .models import (
     ResultadoPesquisa,
     ResultadoProcessamento,
 )
+from .settings import get_settings
 
 if TYPE_CHECKING:
     from .rag import PacoteContextoIA, RespostaIA
 
 
 class RepositorioSQLite:
-    def __init__(self, caminho: Path | str = Path("data/tjsp.sqlite3")) -> None:
-        self.caminho = Path(caminho)
+    def __init__(self, caminho: Path | str | None = None) -> None:
+        self.caminho = (
+            Path(caminho) if caminho is not None else get_settings().sqlite_path
+        )
 
     def inicializar(self) -> None:
         self.caminho.parent.mkdir(parents=True, exist_ok=True)
@@ -34,6 +37,8 @@ class RepositorioSQLite:
             .read_text(encoding="utf-8")
         )
         with self._conectar() as conexao:
+            conexao.execute("PRAGMA journal_mode = WAL")
+            conexao.execute("PRAGMA synchronous = NORMAL")
             conexao.executescript(schema)
 
     def salvar_pesquisa(self, consulta: Consulta, resultado: ResultadoPesquisa) -> int:

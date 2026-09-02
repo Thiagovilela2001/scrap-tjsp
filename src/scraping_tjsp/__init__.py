@@ -6,7 +6,7 @@ from .assisted_research import (
     LimiteCustoPesquisa,
     PesquisaAssistidaTJSP,
 )
-from .client import TJSPClient
+from .client import TJSPClient, TokenBucket
 from .document_analysis import (
     AnaliseDocumentalTJSP,
     ConfiguracaoAnaliseDocumental,
@@ -31,6 +31,7 @@ from .models import (
 from .processor import ProcessadorPDF, ProcessamentoPDFError
 from .rag import PacoteContextoIA, PreparadorContextoIA, ProvedorIA, RespostaIA
 from .search import BuscaHibrida, ResultadoBuscaHibrida
+from .settings import Settings, get_settings, reset_settings
 from .storage import RepositorioSQLite
 from .vector_store import RepositorioChroma, RepositorioChunksChroma
 
@@ -70,6 +71,10 @@ __all__ = [
     "ResultadoPesquisa",
     "ResultadoProcessamento",
     "ServicoColetaTJSP",
+    "Settings",
     "TJSPClient",
+    "TokenBucket",
+    "get_settings",
+    "reset_settings",
     "validar_resposta_juridica",
 ]

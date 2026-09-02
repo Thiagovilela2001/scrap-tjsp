@@ -277,6 +277,36 @@ def test_pesquisa_e_importa_acordaos_do_tjsp(tmp_path: Path):
     assert servico.importacao == (7, ["123"])
 
 
+def test_gerar_minuta_de_peticao(tmp_path: Path):
+    cliente, _ = _cliente(tmp_path)
+
+    resposta = cliente.post(
+        "/tjsp/gerar-minuta",
+        json={
+            "tema": "Dano moral por negativação indevida",
+            "pergunta": "Meu cliente foi negativado indevidamente por dívida paga.",
+            "acordaos_selecionados": [
+                {
+                    "processo": "1000000-00.2023.8.26.0100",
+                    "cd_acordao": "12345",
+                    "relator": "Des. Carlos Silva",
+                    "orgao_julgador": "1ª Câmara de Direito Privado",
+                    "ementa": "Dano moral configurado in re ipsa.",
+                    "argumento": "A jurisprudência dispensa prova do prejuízo.",
+                }
+            ],
+            "instrucao": "Pedir tutela antecipada",
+        },
+    )
+
+    assert resposta.status_code == 200
+    dados = resposta.json()
+    assert "minuta" in dados
+    assert "MINUTA DE FUNDAMENTAÇÃO" in dados["minuta"]
+    assert "1000000-00.2023.8.26.0100" in dados["minuta"]
+    assert dados["acordaos_utilizados"] == 1
+
+
 def test_abre_pdf_local_pelo_codigo_do_acordao(tmp_path: Path):
     cliente, repositorio = _cliente(tmp_path)
     decisao = Decisao(
@@ -316,6 +346,7 @@ def test_abre_pdf_local_pelo_codigo_do_acordao(tmp_path: Path):
     assert resposta.status_code == 200
     assert resposta.headers["content-type"] == "application/pdf"
     assert resposta.content.startswith(b"%PDF-")
+
 
 
 def test_pesquisa_assistida_planeja_busca_no_tjsp(tmp_path: Path):
