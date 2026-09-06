@@ -2,6 +2,13 @@
 
 Coletor para a [Consulta Completa de Jurisprudência do Segundo Grau do TJSP](https://esaj.tjsp.jus.br/cjsg/consultaCompleta.do?f=1). A pesquisa usa texto livre e filtros; número CNJ não é entrada obrigatória.
 
+O adaptador `esaj_cjsg` também atende TJMS, TJAM e TJAC. O TJPR usa adaptador
+próprio para seu portal oficial. A opção `tribunal: "todos"` usa automaticamente
+os cinco portais ativos em `TRIBUNAIS_CONFIG`: TJSP, TJMS, TJAM, TJAC e TJPR.
+TJSC, TJCE e TJAL permanecem catalogados, mas inativos: o
+endpoint configurado do TJSC não resolve, o TJCE exige reCAPTCHA e o portal atual
+do TJAL não responde ao protocolo CJSG. O coletor não contorna CAPTCHA.
+
 ## Escopo atual
 
 - consulta de acórdãos, decisões monocráticas ou homologações;

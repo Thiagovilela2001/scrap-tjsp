@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   X, 
   Copy, 
@@ -8,9 +8,11 @@ import {
   FileText, 
   Download, 
   FileDown,
-  RefreshCw
+  RefreshCw,
+  AlignLeft
 } from 'lucide-react';
 import { exportDraftToDocx } from '../utils/docxExport';
+import { cleanLegalText } from '../utils/cleanLegalText';
 
 const QUICK_PROMPTS = [
   'Adicionar pedido de tutela de urgência / liminar',
@@ -33,6 +35,21 @@ export default function DraftingCanvas({
   const [chatInput, setChatInput] = useState('');
   const [refining, setRefining] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
+  const closeButtonRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const previousFocus = document.activeElement;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    closeButtonRef.current?.focus();
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus?.();
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -92,7 +109,7 @@ export default function DraftingCanvas({
       });
       const data = await res.json();
       if (res.ok && data.minuta) {
-        setDraft(data.minuta);
+        setDraft(cleanLegalText(data.minuta));
         setChatInput('');
       } else {
         alert(data.detail || 'Erro ao ajustar minuta.');
@@ -109,23 +126,13 @@ export default function DraftingCanvas({
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
-      <div className="drafting-modal-wrapper" role="dialog" aria-modal="true">
+      <div className="drafting-modal-wrapper" role="dialog" aria-modal="true" aria-labelledby="drafting-title">
         {/* Studio Top Header */}
         <div className="drafting-header">
-          <div className="drafting-title-group">
-            <div className="drafting-icon-badge">
-              <FileText size={16} />
-            </div>
-            <div>
-              <div className="drafting-main-title">
-                <h2>Minuta Jurídica com Precedentes TJSP</h2>
-                <span className="precedents-count-badge">
-                  {selectedDecisions.length} precedente(s) vinculado(s)
-                </span>
-              </div>
-              <p className="drafting-subtitle">
-                {topic ? `Tema: ${topic}` : 'Argumentação estruturada e pronta para petição.'}
-              </p>
+          <div className="drafting-main-title">
+            <h2 id="drafting-title">Mesa de Redação</h2>
+            <div className="precedents-count-badge">
+              {selectedDecisions?.length || 0} precedentes selecionados
             </div>
           </div>
 
@@ -133,6 +140,16 @@ export default function DraftingCanvas({
             <div className="word-count-badge">
               {wordCount} palavras
             </div>
+
+            <button
+              type="button"
+              className="draft-action-btn"
+              onClick={() => setDraft(cleanLegalText(draft))}
+              title="Corrigir quebras artificiais de linha e alinhar parágrafos fluidos"
+            >
+              <AlignLeft size={13} />
+              <span>Formatar</span>
+            </button>
 
             <button
               type="button"
@@ -170,6 +187,7 @@ export default function DraftingCanvas({
               className="drafting-close-btn"
               onClick={onClose}
               aria-label="Fechar editor de minuta"
+              ref={closeButtonRef}
             >
               <X size={16} />
             </button>

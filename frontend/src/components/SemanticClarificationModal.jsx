@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   X, 
   Check,
   Search, 
   SlidersHorizontal, 
-  CheckCircle2,
-  HelpCircle
+  CheckCircle2
 } from 'lucide-react';
 import { SEMANTIC_BRANCHES, matchSemanticBranch, buildRefinedQuery } from '../utils/semanticVocabulary';
 
@@ -20,6 +19,7 @@ export default function SemanticClarificationModal({
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [customDetail, setCustomDetail] = useState('');
+  const closeButtonRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -35,6 +35,20 @@ export default function SemanticClarificationModal({
     }
   }, [isOpen, initialQuery]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const previousFocus = document.activeElement;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    closeButtonRef.current?.focus();
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus?.();
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const hasAiQuestions = aiQuestions && aiQuestions.length > 0;
@@ -49,7 +63,7 @@ export default function SemanticClarificationModal({
             options: [
               'Pretendo demonstrar a procedência do pedido (Pelo autor/consumidor)',
               'Pretendo afastar a responsabilidade ou reduzir valor (Pela ré/empresa)',
-              'Foco em dano moral in re ipsa e súmulas do TJSP',
+              'Foco em dano moral in re ipsa e súmulas dos tribunais',
               'Foco em restituição material e tutela de urgência',
             ],
           };
@@ -61,7 +75,7 @@ export default function SemanticClarificationModal({
           options: q.opcoes && q.opcoes.length > 0 ? q.opcoes : [
             'Opção favorável ao autor',
             'Opção favorável ao réu',
-            'Tema pacificado no TJSP',
+            'Tema pacificado na jurisprudência',
           ],
         };
       })
@@ -97,7 +111,7 @@ export default function SemanticClarificationModal({
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
-      <div className="semantic-modal-wrapper" role="dialog" aria-modal="true">
+      <div className="semantic-modal-wrapper" role="dialog" aria-modal="true" aria-labelledby="semantic-title">
         {/* Header */}
         <div className="semantic-modal-header">
           <div className="semantic-title-group">
@@ -105,7 +119,7 @@ export default function SemanticClarificationModal({
               <SlidersHorizontal size={17} />
             </div>
             <div>
-              <div className="semantic-modal-title">Desambiguação e Refinamento Semântico</div>
+              <h2 id="semantic-title" className="semantic-modal-title">Desambiguação e Refinamento Semântico</h2>
               <span className="semantic-modal-desc">
                 {hasAiQuestions
                   ? 'Especifique os contornos fáticos e teses para focar os precedentes mais aderentes:'
@@ -119,6 +133,7 @@ export default function SemanticClarificationModal({
             className="drafting-close-btn"
             onClick={onClose}
             aria-label="Fechar formulário semântico"
+            ref={closeButtonRef}
           >
             <X size={16} />
           </button>
@@ -158,7 +173,7 @@ export default function SemanticClarificationModal({
               <section key={q.id} className="semantic-question-card">
                 <div className="question-header-row">
                   <span className="question-step-number">{qIdx + 1}</span>
-                  <h4 className="question-title">{q.title}</h4>
+                  <h3 className="question-title">{q.title}</h3>
                 </div>
 
                 <div className="options-list">
@@ -207,7 +222,7 @@ export default function SemanticClarificationModal({
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="semantic-footer-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
               Cancelar
             </button>
@@ -218,7 +233,7 @@ export default function SemanticClarificationModal({
               onClick={handleConfirm}
             >
               <Search size={14} />
-              <span>Aplicar e Buscar no TJSP</span>
+              <span>Aplicar e Buscar Precedentes</span>
             </button>
           </div>
         </div>

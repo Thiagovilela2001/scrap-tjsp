@@ -12,6 +12,8 @@ export default defineConfig({
       '/auditorias': 'http://127.0.0.1:8000',
       '/buscar': 'http://127.0.0.1:8000',
       '/perguntar': 'http://127.0.0.1:8000',
+      '/pesquisa-assistida': 'http://127.0.0.1:8000',
+      '/tribunais': 'http://127.0.0.1:8000',
     },
   },
 });

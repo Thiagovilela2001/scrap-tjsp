@@ -1,15 +1,21 @@
-import React, { useEffect } from 'react';
-import { X, ExternalLink, Download, FileText, Scale } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { X, ExternalLink, FileText } from 'lucide-react';
 
 export default function PdfDrawer({ isOpen, onClose, pdfData }) {
+  const closeButtonRef = useRef(null);
+
   useEffect(() => {
+    if (!isOpen) return undefined;
+    const previousFocus = document.activeElement;
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
+    closeButtonRef.current?.focus();
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus?.();
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen || !pdfData) return null;
@@ -17,14 +23,14 @@ export default function PdfDrawer({ isOpen, onClose, pdfData }) {
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
-      <aside className={`pdf-drawer ${isOpen ? 'open' : ''}`} aria-label="Visualizador de PDF do TJSP">
+      <aside className={`pdf-drawer ${isOpen ? 'open' : ''}`} role="dialog" aria-modal="true" aria-labelledby="pdf-title">
         <div className="drawer-header">
           <div className="drawer-title-group">
             <div className="drawer-icon-badge">
               <FileText size={18} />
             </div>
             <div>
-              <strong className="drawer-process-title">{pdfData.title || 'Acórdão do TJSP'}</strong>
+              <strong id="pdf-title" className="drawer-process-title">{pdfData.title || 'Acórdão Oficial'}</strong>
               <span className="drawer-chamber-subtitle">{pdfData.subtitle || 'Documento Oficial do Tribunal'}</span>
             </div>
           </div>
@@ -46,6 +52,7 @@ export default function PdfDrawer({ isOpen, onClose, pdfData }) {
               className="drawer-close-btn" 
               onClick={onClose} 
               aria-label="Fechar visualizador"
+              ref={closeButtonRef}
             >
               <X size={18} />
             </button>
@@ -55,7 +62,7 @@ export default function PdfDrawer({ isOpen, onClose, pdfData }) {
         <div className="drawer-body">
           <iframe 
             src={pdfData.url} 
-            title="Visualizador de Inteiro Teor TJSP" 
+            title="Visualizador de Inteiro Teor" 
             className="pdf-iframe"
           />
         </div>

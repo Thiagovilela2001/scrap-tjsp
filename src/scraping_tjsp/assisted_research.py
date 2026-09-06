@@ -5,51 +5,96 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .client import tribunais_ativos
 from .cost import PrecosTokens, estimar_custo_maximo, resumir_custo
 from .models import Consulta, Decisao, ResultadoPesquisa
 from .rag import FonteContexto, PacoteContextoIA, RespostaIA
 from .storage import RepositorioSQLite
 
-INSTRUCOES_PLANEJAMENTO = """Você planeja pesquisa jurisprudencial no TJSP.
-Converta o relato em consultas curtas para o campo de pesquisa livre do CJSG.
+
+def instrucoes_planejamento(tribunal: str = "tjsp") -> str:
+    trib_limpo = tribunal.lower().strip()
+    alvo = "nos tribunais brasileiros" if trib_limpo in ("todos", "all", "brasil", "todas_cortes") else f"no tribunal {tribunal.upper()}"
+    return f"""Você planeja pesquisa jurisprudencial {alvo}.
+Converta o relato em consultas curtas para o campo de pesquisa jurisprudencial.
 Não invente IDs, processos, julgados ou fatos.
 Defina precisa_esclarecimento como true SOMENTE se a pergunta for excessivamente curta ou genérica (ex: apenas uma palavra como "icms", "banco", "dano moral") sem qualquer contexto fático.
-Se a pergunta contiver fatos mínimos, especificações ou detalhes do caso, defina precisa_esclarecimento como false, defina questoes como [] (lista vazia) e SEMPRE gere entre 1 e 3 consultas objetivas para o TJSP.
+Se a pergunta contiver fatos mínimos, especificações ou detalhes do caso, defina precisa_esclarecimento como false, defina questoes como [] (lista vazia) e SEMPRE gere entre 1 e 3 consultas objetivas.
 Se precisa_esclarecimento for true, defina consultas como [] (lista vazia) e gere até 3 questões de esclarecimento com até 4 opções cada.
 Responda somente em JSON válido, sem Markdown, neste formato:
-{
+{{
   "precisa_esclarecimento": true ou false,
   "questoes": [
-    {
+    {{
       "pergunta": "Qual a situação fática ou ponto controvertido?",
       "opcoes": ["Opção 1", "Opção 2", "Opção 3", "Opção 4"]
-    }
+    }}
   ],
   "tema": "síntese curta",
   "consultas": [
-    {"pesquisa": "termos com até 120 caracteres", "justificativa": "motivo"}
+    {{"pesquisa": "termos com até 120 caracteres", "justificativa": "motivo"}}
   ]
-}
+}}
 Gere no máximo três consultas ou três questões de esclarecimento."""
 
-INSTRUCOES_ANALISE = """Você analisa candidatos de jurisprudência do TJSP.
+
+def instrucoes_analise(tribunal: str = "tjsp") -> str:
+    trib_limpo = tribunal.lower().strip()
+    alvo = "dos tribunais brasileiros" if trib_limpo in ("todos", "all", "brasil", "todas_cortes") else f"do tribunal {tribunal.upper()}"
+    return f"""Você analisa candidatos de jurisprudência {alvo}.
 Use somente as ementas fornecidas. Não afirme que uma decisão sustenta uma tese além
 do que está expresso na ementa. Ranqueie aderência ao caso e explique como cada
 processo pode contribuir como argumento, sempre indicando a necessidade de revisar
 o inteiro teor. Responda somente em JSON válido, sem Markdown, neste formato:
-{
+{{
   "resultados": [
-    {
+    {{
       "cd_acordao": "identificador fornecido",
       "relevancia": 0.0,
       "argumento": "possível uso argumentativo",
       "aderencia_fatica": "pontos de aproximação ou diferença",
       "ressalva": "limitação relevante"
-    }
+    }}
   ]
-}
+}}
 Retorne no máximo seis resultados, ordenados por relevância decrescente.
 Seja conciso: cada campo textual deve ter no máximo 350 caracteres."""
+
+
+INSTRUCOES_PLANEJAMENTO = instrucoes_planejamento("tjsp")
+INSTRUCOES_ANALISE = instrucoes_analise("tjsp")
+
+TODOS_TJS: tuple[str, ...] = (
+    "tjac",
+    "tjal",
+    "tjam",
+    "tjap",
+    "tjba",
+    "tjce",
+    "tjdft",
+    "tjes",
+    "tjgo",
+    "tjma",
+    "tjmg",
+    "tjms",
+    "tjmt",
+    "tjpa",
+    "tjpb",
+    "tjpe",
+    "tjpi",
+    "tjpr",
+    "tjrj",
+    "tjrn",
+    "tjro",
+    "tjrr",
+    "tjrs",
+    "tjsc",
+    "tjse",
+    "tjsp",
+    "tjto",
+)
+
+TRIBUNAIS_PADRAO_TODOS: tuple[str, ...] = TODOS_TJS
 
 
 class ErroPesquisaAssistida(RuntimeError):
@@ -115,7 +160,7 @@ class PesquisaAssistidaTJSP:
                 "planejamento", 15, f"Planejando consultas jurídicas para o {trib_upper}..."
             )
 
-        pacote_plano = _pacote_planejamento(pergunta, contexto_caso)
+        pacote_plano = _pacote_planejamento(pergunta, contexto_caso, tribunal=tribunal)
         estimativa_maxima = self._estimar_maximo(pacote_plano)
         if estimativa_maxima > max_custo_brl:
             raise LimiteCustoPesquisa(estimativa_maxima, max_custo_brl)
@@ -161,7 +206,7 @@ class PesquisaAssistidaTJSP:
         if not candidatos:
             if callback_progresso:
                 callback_progresso(
-                    "sem_resultados", 100, "Nenhum acórdão encontrado no TJSP."
+                    "sem_resultados", 100, f"Nenhum acórdão encontrado no(s) tribunal(is) {trib_upper}."
                 )
             return {
                 "status": "sem_resultados",
@@ -193,7 +238,7 @@ class PesquisaAssistidaTJSP:
             )
 
         pacote_analise = _pacote_analise(
-            pergunta, contexto_caso, candidatos, self.config
+            pergunta, contexto_caso, candidatos, self.config, tribunal=tribunal
         )
         provedor_analise = self.provedor_factory(
             modelo,
@@ -304,12 +349,16 @@ class PesquisaAssistidaTJSP:
         lotes: list[list[tuple[Decisao, str]]] = []
         executadas: list[dict] = []
 
-        # Tribunais ativos comprovados
-        tribs_alvo = (
-            ["tjsp", "tjms", "tjam", "tjac"]
-            if tribunal in ("todos", "all", "", None)
-            else [tribunal.lower().strip()]
-        )
+        if not tribunal or tribunal.lower() in ("todos", "all"):
+            tribs_alvo = list(TRIBUNAIS_PADRAO_TODOS)
+        elif tribunal.lower() in ("todas_cortes", "todos_nacionais", "brasil"):
+            tribs_alvo = list(tribunais_ativos())
+        elif tribunal.lower() in ("superiores", "tribunais_superiores"):
+            tribs_alvo = ["stf", "stj", "tst", "tse", "stm"]
+        elif "," in tribunal:
+            tribs_alvo = [t.strip().lower() for t in tribunal.split(",") if t.strip()]
+        else:
+            tribs_alvo = [tribunal.lower().strip()]
 
         def coletar_tribunal_consulta(item_consulta: dict, trib: str):
             try:
@@ -323,7 +372,8 @@ class PesquisaAssistidaTJSP:
             except Exception:
                 return item_consulta, trib, {}, []
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        max_workers = min(32, max(1, len(consultas) * len(tribs_alvo)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futuros = [
                 executor.submit(coletar_tribunal_consulta, item, trib)
                 for item in consultas
@@ -398,13 +448,15 @@ class PesquisaAssistidaTJSP:
         return resposta, execucao_id
 
 
-def _pacote_planejamento(pergunta: str, contexto: str) -> PacoteContextoIA:
+def _pacote_planejamento(
+    pergunta: str, contexto: str, tribunal: str = "tjsp"
+) -> PacoteContextoIA:
     mensagem = f"Pergunta de pesquisa:\n{pergunta}"
     if contexto:
         mensagem += f"\n\nContexto factual do caso:\n{contexto}"
     return PacoteContextoIA(
         pergunta=pergunta,
-        instrucoes_sistema=INSTRUCOES_PLANEJAMENTO,
+        instrucoes_sistema=instrucoes_planejamento(tribunal),
         mensagem_usuario=mensagem,
         fontes=(),
     )
@@ -415,6 +467,7 @@ def _pacote_analise(
     contexto: str,
     candidatos: list[Decisao],
     config: ConfiguracaoPesquisaAssistida,
+    tribunal: str = "tjsp",
 ) -> PacoteContextoIA:
     fontes = tuple(
         FonteContexto(
@@ -442,7 +495,7 @@ def _pacote_analise(
     mensagem += "\n\nCandidatos:\n" + "\n\n".join(blocos)
     return PacoteContextoIA(
         pergunta=pergunta,
-        instrucoes_sistema=INSTRUCOES_ANALISE,
+        instrucoes_sistema=instrucoes_analise(tribunal),
         mensagem_usuario=mensagem,
         fontes=fontes,
     )

@@ -1,14 +1,11 @@
-import React, { useRef, useEffect } from 'react';
-import { Search, CornerDownLeft, X, Sparkles, SlidersHorizontal, Globe } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { ArrowRight, CornerDownLeft, SlidersHorizontal, X } from 'lucide-react';
 
-const QUICK_TAGS = [
-  'Dano Moral in re ipsa',
-  'Prescrição Intercorrente',
-  'Atraso de Voo e Extravio',
-  'Vício Construtivo Imobiliário',
-  'Golpe do PIX e Fortuito Interno',
-  'Negativa de Plano de Saúde',
-  'Desapropriação e Juros Moratórios',
+const QUICK_QUERIES = [
+  'Dano moral in re ipsa',
+  'Prescrição intercorrente',
+  'Golpe do PIX',
+  'Vício construtivo',
 ];
 
 export default function PromptBox({
@@ -18,122 +15,79 @@ export default function PromptBox({
   loading,
   onSelectQuickTag,
   onOpenSemanticAssistant,
+  selectedCourtCodes,
 }) {
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
-    }
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = 'auto';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 176)}px`;
   }, [prompt]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       onSubmit();
     }
   };
 
   const handleClear = () => {
     setPrompt('');
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
+    textareaRef.current?.focus();
   };
 
   return (
-    <div className="search-console">
+    <section className="search-console" aria-labelledby="search-title">
       <div className="search-console-box">
         <div className="search-console-top">
-          <div className="search-mode-tag">
-            <Globe size={13} />
-            <span>Pesquisa Unificada Multi-Tribunais • TJSP, TJSC, TJMS, TJCE, TJAM, TJAL, TJAC</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className="semantic-assistant-btn"
-              onClick={onOpenSemanticAssistant}
-              title="Abrir opções e ramificações semânticas guiadas"
-            >
-              <SlidersHorizontal size={12} />
-              <span>Opções Guiadas</span>
-            </button>
-
-            {prompt && (
-              <button 
-                type="button" 
-                className="clear-query-btn" 
-                onClick={handleClear}
-                title="Limpar pesquisa"
-              >
-                <X size={14} /> Limpar
-              </button>
-            )}
+          <div>
+            <span className="search-kicker">Consulta 01</span>
+            <h2 id="search-title" className="search-title">Questão jurídica</h2>
           </div>
         </div>
-
         <div className="search-input-wrapper">
+          <label className="sr-only" htmlFor="legal-query">Descreva fatos, controvérsia e tese jurídica</label>
           <textarea
+            id="legal-query"
             ref={textareaRef}
             className="search-textarea"
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Descreva o caso, fatos ou tese jurídica (a IA buscará precedentes em todos os Tribunais de Justiça simultaneamente)..."
-            rows={2}
+            placeholder="Ex.: instituição financeira responde por transferência via PIX realizada após engenharia social?"
+            rows={3}
             disabled={loading}
           />
+          {prompt && (
+            <button type="button" className="clear-query-btn" onClick={handleClear} aria-label="Limpar questão jurídica">
+              <X size={15} aria-hidden="true" />
+            </button>
+          )}
         </div>
-
         <div className="search-console-footer">
-          <div className="search-shortcuts">
-            <span className="shortcut-chip">
-              <CornerDownLeft size={11} /> <strong>Enter</strong> para pesquisar
-            </span>
-            <span className="shortcut-chip">
-              <strong>Shift + Enter</strong> para quebra de linha
-            </span>
-          </div>
-
-          <button
-            type="button"
-            className="search-submit-btn"
-            onClick={onSubmit}
-            disabled={loading || !prompt.trim()}
-            aria-label="Buscar Jurisprudência em todos os Tribunais"
-          >
-            {loading ? (
-              <span className="btn-spinner" />
-            ) : (
-              <>
-                <Search size={16} />
-                <span>Pesquisar nos Tribunais</span>
-              </>
-            )}
+          <button type="button" className="semantic-assistant-btn" onClick={onOpenSemanticAssistant}>
+            <SlidersHorizontal size={14} aria-hidden="true" /> Delimitar caso
           </button>
+          <div className="search-submit-wrap">
+            <span className="search-shortcut"><CornerDownLeft size={12} aria-hidden="true" /> Enter</span>
+            <button type="button" className="search-submit-btn" onClick={onSubmit} disabled={loading || !prompt.trim() || selectedCourtCodes.size === 0}>
+              <span>{loading ? 'Pesquisando' : 'Pesquisar'}</span>
+              {loading ? <span className="btn-spinner" aria-hidden="true" /> : <ArrowRight size={16} aria-hidden="true" />}
+            </button>
+          </div>
         </div>
       </div>
-
-      <div className="quick-tags-container">
-        <span className="quick-tags-label">
-          <Sparkles size={12} /> Temas Rápidos:
-        </span>
+      <div className="quick-tags-container" aria-label="Consultas sugeridas">
+        <span className="quick-tags-label">Pontos de partida</span>
         <div className="quick-tags-list">
-          {QUICK_TAGS.map((tag, idx) => (
-            <button
-              key={idx}
-              type="button"
-              className="quick-tag-pill"
-              onClick={() => onSelectQuickTag(tag)}
-            >
-              {tag}
+          {QUICK_QUERIES.map((query, index) => (
+            <button key={query} type="button" className="quick-tag-pill" onClick={() => onSelectQuickTag(query)}>
+              <span>{String(index + 1).padStart(2, '0')}</span>{query}
             </button>
           ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

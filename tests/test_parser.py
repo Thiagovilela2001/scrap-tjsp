@@ -51,6 +51,17 @@ def test_calcula_paginas():
     assert numero_paginas(21) == 2
 
 
+def test_monta_url_do_inteiro_teor_para_tribunal_configurado():
+    _, decisoes = parsear_pagina(
+        HTML,
+        inteiro_teor_base_url="https://esaj.tjms.jus.br/cjsg/getArquivo.do",
+    )
+
+    assert decisoes[0].inteiro_teor_url.startswith(
+        "https://esaj.tjms.jus.br/cjsg/getArquivo.do?"
+    )
+
+
 def test_recusa_pagina_de_consulta():
     html = '<form name="consultaCompletaForm"></form>'
     try:

@@ -51,6 +51,11 @@ def construir_parser(
     )
     parser.add_argument("--sem-sinonimos", action="store_true")
     parser.add_argument(
+        "--tribunal",
+        default="tjsp",
+        help="Sigla ou código do tribunal (ex: tjsp, tjpr, tjrj, tjce); padrão: tjsp.",
+    )
+    parser.add_argument(
         "--paginas",
         type=int,
         default=cfg.max_paginas_tjsp,
@@ -156,7 +161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         tipo_decisao=args.tipo,
         pesquisar_sinonimos=not args.sem_sinonimos,
     )
-    cliente = TJSPClient(intervalo=args.intervalo)
+    cliente = TJSPClient(tribunal=args.tribunal, intervalo=args.intervalo)
     resultado = cliente.pesquisar(consulta, max_paginas=args.paginas)
     _salvar(args.saida, resultado.decisoes)
 

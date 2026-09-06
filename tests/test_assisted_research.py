@@ -209,3 +209,35 @@ def test_recupera_itens_completos_de_json_truncado():
     assert dados["resultados"] == [
         {"cd_acordao": "101", "relevancia": 0.9, "argumento": "Útil."}
     ]
+
+
+def test_buscar_candidatos_todos_os_27_tjs(tmp_path: Path):
+    from scraping_tjsp.assisted_research import TODOS_TJS
+
+    repositorio = _repositorio(tmp_path)
+    tribunais_consultados = []
+
+    class ServicoColetaMultiTribunal:
+        def pesquisar(self, consulta, *, paginas, tribunal):
+            tribunais_consultados.append(tribunal)
+            return {
+                "consulta_id": 1,
+                "decisoes": [_decisao(f"id_{tribunal}", f"proc_{tribunal}").como_dict()],
+            }
+
+    pesquisa = PesquisaAssistidaTJSP(
+        repositorio,
+        ServicoColetaMultiTribunal(),
+        FabricaProvedores([]),
+    )
+
+    candidatos, executadas = pesquisa._buscar_candidatos(
+        [{"pesquisa": "teste"}],
+        tribunal="todos",
+    )
+
+    assert len(tribunais_consultados) == 27
+    for tj in TODOS_TJS:
+        assert tj in tribunais_consultados
+    assert len(candidatos) == 20  # bounded by max_candidatos (20)
+

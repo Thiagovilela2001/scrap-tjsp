@@ -166,7 +166,7 @@ class RequisicaoPesquisaAssistida(BaseModel):
     contexto_caso: str = Field(default="", max_length=8_000)
     modelo: str | None = Field(default=None, min_length=1, max_length=100)
     max_custo_brl: float | None = Field(default=None, gt=0)
-    tribunal: str = Field(default="todos", max_length=20)
+    tribunal: str = Field(default="todos", max_length=1_000)
 
 
 class RequisicaoAnaliseDocumental(BaseModel):
@@ -328,8 +328,28 @@ def criar_app(
             documento = sqlite.obter_documento(cd_acordao)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except LookupError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except LookupError:
+            decisao = sqlite.obter_decisao(cd_acordao)
+            if decisao and decisao.inteiro_teor_url:
+                try:
+                    downloader = PDFDownloader(
+                        cliente_tjsp,
+                        diretorio=config.diretorio_pdfs,
+                        limite_bytes=config.max_mb_pdf * 1024 * 1024,
+                    )
+                    baixado = downloader.baixar(decisao)
+                    sqlite.registrar_documento(baixado)
+                    documento = sqlite.obter_documento(cd_acordao)
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Não foi possível obter o inteiro teor do documento: {exc}",
+                    ) from exc
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Arquivo local do acórdão {cd_acordao} não encontrado.",
+                )
         caminho = Path(documento["caminho_local"] or "").resolve()
         diretorio_permitido = config.diretorio_pdfs.resolve()
         if not caminho.is_relative_to(diretorio_permitido):
@@ -457,7 +477,9 @@ def criar_app(
                 "sigla": info["sigla"],
                 "nome": info["nome"],
                 "uf": info["uf"],
-                "ativo": True,
+                "adaptador": info["adaptador"],
+                "ativo": info["ativo"],
+                "motivo_inativo": info.get("motivo_inativo", ""),
             }
             for codigo, info in TRIBUNAIS_CONFIG.items()
         ]
@@ -504,6 +526,10 @@ def criar_app(
             },
         )
 
+    # Aliases agnósticos de tribunal
+    app.post("/pesquisa-assistida", tags=["inteligencia-artificial"])(pesquisar_tjsp_com_ia)
+    app.post("/pesquisa-assistida/stream", tags=["inteligencia-artificial"])(pesquisar_tjsp_com_ia_stream)
+
     @app.post(
         "/tjsp/analisar-documentos",
         tags=["inteligencia-artificial", "documentos"],
@@ -549,18 +575,20 @@ def criar_app(
         acordaos = requisicao.acordaos_selecionados
         instrucao = requisicao.instrucao.strip()
 
+        from .parser import limpar_quebras_juridicas
+
         resumo_acordaos = []
         for a in acordaos:
             proc = a.get("processo") or f"Acórdão {a.get('cd_acordao', '')}"
             rel = a.get("relator") or "Relator não informado"
-            orgao = a.get("orgao_julgador") or "TJSP"
+            orgao = a.get("orgao_julgador") or "Tribunal competente"
             dt = a.get("data_julgamento") or ""
-            ementa = a.get("ementa") or ""
+            ementa = limpar_quebras_juridicas(a.get("ementa") or "")
             arg = a.get("argumento") or a.get("aderencia_fatica") or ""
             resumo_acordaos.append(
                 f"- Processo: {proc} | Órgão: {orgao} | Relator: {rel} | Julgamento: {dt}\n"
                 f"  Aplicação: {arg}\n"
-                f"  Ementa: {ementa[:400]}"
+                f"  Ementa: {ementa[:450]}"
             )
         texto_precedentes = "\n\n".join(resumo_acordaos)
 
@@ -569,29 +597,30 @@ def criar_app(
             try:
                 provedor = criar_provedor(None, 2000)
                 prompt_sistema = (
-                    "Você é um especialista em redação de peças processuais e teses jurídicas para o Tribunal de Justiça de São Paulo (TJSP).\n"
+                    "Você é um especialista em redação de peças processuais e teses jurídicas assertivas para tribunais brasileiros.\n"
                     "Redija uma fundamentação jurídica formal, assertiva e bem estruturada para inclusão direta em petição.\n"
+                    "IMPORTANTE: Escreva em parágrafos contínuos e fluidos, sem quebras de linha no meio de frases.\n\n"
                     "Estrutura recomendada:\n"
                     "# EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO...\n\n"
                     "## I. DOS FATOS RELEVANTES E DO CONTEXTO\n"
-                    "## II. DA JURISPRUDÊNCIA FIRME DO TJSP (PRECEDENTES APLICÁVEIS)\n"
+                    "## II. DA JURISPRUDÊNCIA FIRME (PRECEDENTES APLICÁVEIS)\n"
                     "## III. DA FUNDAMENTAÇÃO E APLICAÇÃO AO CASO CONCRETO\n"
                     "## IV. DOS PEDIDOS E REQUERIMENTOS\n\n"
                     f"Tema: {tema}\n"
                     f"Fatos / Consulta: {requisicao.pergunta}\n"
                     f"Detalhes do caso: {requisicao.contexto_caso}\n\n"
-                    f"Precedentes do TJSP Selecionados:\n{texto_precedentes}\n\n"
+                    f"Precedentes Selecionados:\n{texto_precedentes}\n\n"
                 )
                 if instrucao:
                     prompt_sistema += f"\nInstruções de Ajuste do Advogado: {instrucao}\n"
 
                 pacote = PacoteContextoIA(
                     instrucoes_sistema=prompt_sistema,
-                    mensagem_usuario=f"Redija a minuta de fundamentação jurídica com base nos acórdãos: {tema}",
+                    mensagem_usuario=f"Redija a minuta de fundamentação jurídica com base nos precedentes: {tema}",
                 )
                 resposta_ia = provedor.responder(pacote)
                 return {
-                    "minuta": resposta_ia.texto,
+                    "minuta": limpar_quebras_juridicas(resposta_ia.texto),
                     "tema": tema,
                     "acordaos_utilizados": len(acordaos),
                 }
@@ -605,16 +634,16 @@ def criar_app(
             "## I. DO CONTEXTO FÁTICO",
             requisicao.contexto_caso or requisicao.pergunta,
             "",
-            "## II. DA JURISPRUDÊNCIA PACÍFICA DO TRIBUNAL DE JUSTIÇA DE SÃO PAULO",
-            "A pretensão formulada encontra integral acolhimento na iterativa jurisprudência desta Egrégia Corte bandeirante:",
+            "## II. DA JURISPRUDÊNCIA PACÍFICA DOS TRIBUNAIS",
+            "A pretensão formulada encontra integral acolhimento na iterativa jurisprudência dos tribunais pátrios:",
             "",
         ]
         for idx, a in enumerate(acordaos, 1):
             proc = a.get("processo") or f"Acórdão nº {a.get('cd_acordao', '')}"
             rel = a.get("relator") or "Relator designado"
-            orgao = a.get("orgao_julgador") or "Tribunal de Justiça de São Paulo"
+            orgao = a.get("orgao_julgador") or "Tribunal competente"
             dt = f", j. em {a.get('data_julgamento')}" if a.get("data_julgamento") else ""
-            ementa = a.get("ementa", "").strip()
+            ementa = limpar_quebras_juridicas(a.get("ementa", "").strip())
             arg = a.get("argumento") or a.get("aderencia_fatica") or ""
 
             linhas.append(f"### {idx}. {proc} — {orgao}")
@@ -623,7 +652,9 @@ def criar_app(
             if arg:
                 linhas.append(f"**Tese Aplicável:** {arg}")
             if ementa:
-                linhas.append(f"\n> *\"{ementa}\"*\n")
+                linhas.append("")
+                linhas.append(f"> *\"{ementa}\"*")
+                linhas.append("")
 
         linhas.extend([
             "## III. DA SUBSUNÇÃO FÁTICA E DO DIREITO",

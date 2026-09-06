@@ -1,228 +1,68 @@
 import React from 'react';
-import { 
-  History, 
-  Trash2, 
-  Scale, 
-  BarChart3, 
-  ChevronRight,
-  BookmarkCheck,
-  X,
-  SlidersHorizontal
-} from 'lucide-react';
+import { Clock3, FileStack, Filter, Trash2, X } from 'lucide-react';
+import CourtSelector from './CourtSelector';
 
-const TOPIC_PRESETS = [
-  { label: 'Negativação indevida & Dano moral in re ipsa', query: 'Negativação indevida por dívida já paga. Cabe indenização por dano moral in re ipsa no TJSP?' },
-  { label: 'Atraso de voo internacional & Extravio', query: 'Cancelamento e atraso excessivo de voo internacional gera dano moral presumido no TJSP?' },
-  { label: 'Prescrição intercorrente na execução', query: 'Qual o termo inicial da prescrição intercorrente na execução de título extrajudicial segundo o TJSP?' },
-  { label: 'Vício construtivo em imóvel & Infiltração', query: 'Prazo prescricional e decadencial para indenização de vício construtivo e infiltração em condomínio.' },
-  { label: 'Golpe do PIX & Fortuito interno bancário', query: 'Responsabilidade civil de instituição financeira em golpe do PIX sob a ótica da Súmula 479 do STJ no TJSP.' },
-];
-
-export default function Sidebar({
-  isOpen,
-  onClose,
-  history,
-  onSelectHistory,
-  onClearHistory,
-  onDeleteHistoryItem,
-  results,
-  selectedChamberFilter,
-  onSelectChamberFilter,
-  selectedCount,
-  onSelectPreset,
-}) {
+export default function Sidebar({ isOpen, onClose, history, onSelectHistory, onClearHistory, onDeleteHistoryItem, results, selectedChamberFilter, onSelectChamberFilter, selectedCount, activeCourtCodes, selectedCourtCodes, onCourtSelectionChange, loading }) {
   const processos = results?.processos || [];
-  const uniqueOrgaos = [...new Set(processos.map((p) => p.orgao_julgador).filter(Boolean))];
-  const uniqueTribunais = [...new Set(processos.map((p) => p.tribunal).filter(Boolean))];
-  const avgRelevance = processos.length 
-    ? Math.round((processos.reduce((acc, p) => acc + (p.relevancia || 0), 0) / processos.length) * 100) 
+  const uniqueOrgaos = [...new Set(processos.map((processo) => processo.orgao_julgador).filter(Boolean))];
+  const uniqueTribunais = [...new Set(processos.map((processo) => processo.tribunal).filter(Boolean))];
+  const avgRelevance = processos.length
+    ? Math.round(processos.reduce((total, processo) => total + (processo.relevancia || 0), 0) / processos.length * 100)
     : 0;
 
   return (
-    <aside className={`studio-sidebar ${isOpen ? 'open' : ''}`}>
+    <aside id="research-sidebar" className={`studio-sidebar ${isOpen ? 'open' : ''}`} aria-label="Arquivo de pesquisa">
       <div className="sidebar-header">
-        <div className="sidebar-title">
-          <Scale size={16} />
-          <span>Painel Jurídico</span>
-        </div>
-        <button 
-          className="sidebar-close-btn" 
-          onClick={onClose}
-          aria-label="Fechar painel lateral"
-        >
-          <X size={16} />
-        </button>
+        <div><span className="sidebar-eyebrow">Workspace</span><h2 className="sidebar-title">Arquivo de pesquisa</h2></div>
+        <button type="button" className="sidebar-close-btn" onClick={onClose} aria-label="Fechar arquivo"><X size={17} aria-hidden="true" /></button>
       </div>
-
       <div className="sidebar-scrollable">
-        {/* Research Metrics Widget */}
-        {results && processos.length > 0 && (
-          <section className="sidebar-section">
-            <div className="sidebar-section-header">
-              <span>Análise da Pesquisa</span>
-            </div>
-            
-            <div className="metrics-grid">
-              <div className="metric-box">
-                <span className="metric-value">{processos.length}</span>
-                <span className="metric-label">Precedentes</span>
-              </div>
-              <div className="metric-box">
-                <span className="metric-value">{avgRelevance}%</span>
-                <span className="metric-label">Aderência Média</span>
-              </div>
-              <div className="metric-box">
-                <span className="metric-value">{uniqueTribunais.length || 1}</span>
-                <span className="metric-label">Tribunais</span>
-              </div>
-              <div className="metric-box">
-                <span className="metric-value">{selectedCount}</span>
-                <span className="metric-label">Para Minuta</span>
-              </div>
-            </div>
-
-            {uniqueTribunais.length > 1 && (
-              <div className="chamber-filter-group" style={{ marginBottom: '8px' }}>
-                <label className="filter-group-label">
-                  <SlidersHorizontal size={12} /> Filtrar por Tribunal:
-                </label>
-                <div className="chamber-tags">
-                  <button
-                    type="button"
-                    className={`chamber-tag-btn ${selectedChamberFilter === 'all' ? 'active' : ''}`}
-                    onClick={() => onSelectChamberFilter('all')}
-                  >
-                    Todos os Tribunais ({processos.length})
-                  </button>
-                  {uniqueTribunais.map((trib, i) => {
-                    const count = processos.filter((p) => p.tribunal === trib).length;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        className={`chamber-tag-btn ${selectedChamberFilter === trib ? 'active' : ''}`}
-                        onClick={() => onSelectChamberFilter(trib)}
-                        title={trib}
-                      >
-                        {trib} ({count})
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {uniqueOrgaos.length > 0 && (
+        {processos.length > 0 && (
+          <section className="sidebar-section sidebar-analysis" aria-labelledby="analysis-title">
+            <div className="sidebar-section-header"><h3 id="analysis-title">Leitura do conjunto</h3><FileStack size={14} aria-hidden="true" /></div>
+            <dl className="metrics-grid">
+              <div className="metric-box"><dt>Precedentes</dt><dd>{processos.length}</dd></div>
+              <div className="metric-box"><dt>Aderência média</dt><dd>{avgRelevance}%</dd></div>
+              <div className="metric-box"><dt>Tribunais</dt><dd>{uniqueTribunais.length || 1}</dd></div>
+              <div className="metric-box"><dt>Selecionados</dt><dd>{selectedCount}</dd></div>
+            </dl>
+            {(uniqueTribunais.length > 1 || uniqueOrgaos.length > 0) && (
               <div className="chamber-filter-group">
-                <label className="filter-group-label">
-                  <SlidersHorizontal size={12} /> Filtrar por Órgão:
-                </label>
+                <div className="filter-group-label"><Filter size={12} aria-hidden="true" /> Filtrar relatório</div>
                 <div className="chamber-tags">
-                  <button
-                    type="button"
-                    className={`chamber-tag-btn ${selectedChamberFilter === 'all' ? 'active' : ''}`}
-                    onClick={() => onSelectChamberFilter('all')}
-                  >
-                    Todos ({processos.length})
-                  </button>
-                  {uniqueOrgaos.map((org, i) => {
-                    const count = processos.filter((p) => p.orgao_julgador === org).length;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        className={`chamber-tag-btn ${selectedChamberFilter === org ? 'active' : ''}`}
-                        onClick={() => onSelectChamberFilter(org)}
-                        title={org}
-                      >
-                        {org} ({count})
-                      </button>
-                    );
-                  })}
+                  <button type="button" className={`chamber-tag-btn ${selectedChamberFilter === 'all' ? 'active' : ''}`} onClick={() => onSelectChamberFilter('all')}>Todos · {processos.length}</button>
+                  {uniqueTribunais.map((tribunal) => <button key={tribunal} type="button" className={`chamber-tag-btn ${selectedChamberFilter === tribunal ? 'active' : ''}`} onClick={() => onSelectChamberFilter(tribunal)}>{tribunal} · {processos.filter((processo) => processo.tribunal === tribunal).length}</button>)}
+                  {uniqueOrgaos.map((orgao) => <button key={orgao} type="button" className={`chamber-tag-btn ${selectedChamberFilter === orgao ? 'active' : ''}`} onClick={() => onSelectChamberFilter(orgao)} title={orgao}>{orgao}</button>)}
                 </div>
               </div>
             )}
           </section>
         )}
-
-        {/* History Section */}
-        <section className="sidebar-section">
+        <section className="sidebar-section" aria-labelledby="history-title">
           <div className="sidebar-section-header">
-            <span>Histórico de Pesquisas</span>
-            {history && history.length > 0 && (
-              <button 
-                className="clear-history-btn" 
-                onClick={onClearHistory}
-                title="Limpar todo o histórico"
-              >
-                Limpar
-              </button>
-            )}
+            <h3 id="history-title"><Clock3 size={14} aria-hidden="true" /> Histórico</h3>
+            {history.length > 0 && <button type="button" className="clear-history-btn" onClick={onClearHistory}>Limpar</button>}
           </div>
-
-          {history && history.length > 0 ? (
-            <ul className="history-list">
-              {history.map((item, idx) => (
-                <li key={idx} className="history-item">
-                  <button
-                    type="button"
-                    className="history-query-btn"
-                    onClick={() => onSelectHistory(item)}
-                    title={item}
-                  >
-                    <ChevronRight size={12} className="history-arrow" />
-                    <span className="history-text">{item}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="history-del-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteHistoryItem(item);
-                    }}
-                    title="Excluir item"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+          {history.length > 0 ? (
+            <ol className="history-list">
+              {history.map((item, index) => (
+                <li key={item} className="history-item">
+                  <span className="history-index">{String(index + 1).padStart(2, '0')}</span>
+                  <button type="button" className="history-query-btn" onClick={() => onSelectHistory(item)} title={item}><span className="history-text">{item}</span></button>
+                  <button type="button" className="history-del-btn" onClick={() => onDeleteHistoryItem(item)} aria-label={`Excluir pesquisa: ${item}`}><Trash2 size={13} aria-hidden="true" /></button>
                 </li>
               ))}
-            </ul>
-          ) : (
-            <div className="sidebar-empty-state">
-              <span>Nenhuma pesquisa recente.</span>
-            </div>
-          )}
+            </ol>
+          ) : <p className="sidebar-empty-state">Consultas recentes aparecerão aqui.</p>}
         </section>
-
-        {/* Recurrent Legal Topics */}
-        <section className="sidebar-section">
-          <div className="sidebar-section-header">
-            <span>Teses Recorrentes TJSP</span>
-          </div>
-
-          <div className="presets-list">
-            {TOPIC_PRESETS.map((preset, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className="preset-card-btn"
-                onClick={() => onSelectPreset(preset.query)}
-              >
-                <div className="preset-pill-title">{preset.label}</div>
-                <div className="preset-pill-snippet">{preset.query}</div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Footer info */}
-        <div className="sidebar-footer-info">
-          <div className="court-badge-row">
-            <div className="court-dot-live" />
-            <span>Repositório Jurisprudencial TJSP</span>
-          </div>
-          <small>Consultas a acórdãos oficiais de Direito Privado e Público.</small>
-        </div>
+        <CourtSelector
+          activeCodes={activeCourtCodes}
+          selectedCodes={selectedCourtCodes}
+          onChange={onCourtSelectionChange}
+          disabled={loading}
+          compact
+        />
+        <footer className="sidebar-footer-info"><span>Fontes oficiais</span><small>Acórdãos e metadados dos Tribunais de Justiça.</small></footer>
       </div>
     </aside>
   );

@@ -242,10 +242,10 @@ async function verificarSaude() {
 // ============================================================================
 
 async function consumirSSEAssistida(payload) {
-  const resposta = await fetch("/tjsp/pesquisa-assistida/stream", {
+  const resposta = await fetch("/pesquisa-assistida/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ tribunal: "todos", ...payload }),
   });
   if (!resposta.ok) {
     const erroJson = await resposta.json().catch(() => null);
@@ -352,7 +352,7 @@ function prepararCarregamento() {
   listaResultados.replaceChildren();
   gradeFontes.replaceChildren();
   estadoCarregando.hidden = false;
-  estadoCarregando.querySelector("strong").textContent = "Pensando e consultando o TJSP...";
+  estadoCarregando.querySelector("strong").textContent = "Pensando e consultando os tribunais...";
   estadoCarregando.querySelector("span").textContent =
     "Interpretando termos jurídicos e localizando decisões aderentes no tribunal...";
   botaoEnviar.disabled = true;

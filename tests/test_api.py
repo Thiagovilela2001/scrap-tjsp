@@ -225,6 +225,29 @@ def test_saude_e_busca_hibrida(tmp_path: Path):
     assert busca.chamada["filtros"] == {"cd_acordao": "123"}
 
 
+def test_lista_adaptadores_e_status_dos_tribunais(tmp_path: Path):
+    cliente, _ = _cliente(tmp_path)
+
+    tribunais = {item["codigo"]: item for item in cliente.get("/tribunais").json()}
+
+    assert tribunais["tjsp"]["adaptador"] == "esaj_cjsg"
+    assert tribunais["tjsp"]["ativo"] is True
+    assert tribunais["tjpr"]["adaptador"] == "tjpr"
+    assert tribunais["tjce"]["adaptador"] == "datajud"
+    assert tribunais["tjrj"]["adaptador"] == "datajud"
+    assert tribunais["tjrj"]["ativo"] is True
+    assert tribunais["stj"]["adaptador"] == "datajud"
+    assert tribunais["stj"]["ativo"] is True
+    assert tribunais["tst"]["adaptador"] == "datajud"
+    assert tribunais["tst"]["ativo"] is True
+    assert tribunais["tse"]["adaptador"] == "datajud"
+    assert tribunais["tse"]["ativo"] is True
+    assert tribunais["stm"]["adaptador"] == "datajud"
+    assert tribunais["stm"]["ativo"] is True
+    assert tribunais["stf"]["adaptador"] == "stf"
+    assert tribunais["stf"]["ativo"] is True
+
+
 def test_raiz_entrega_interface_e_assets(tmp_path: Path):
     cliente, _ = _cliente(tmp_path)
 

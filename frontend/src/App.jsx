@@ -6,13 +6,9 @@ import DecisionCard from './components/DecisionCard';
 import PdfDrawer from './components/PdfDrawer';
 import DraftingCanvas from './components/DraftingCanvas';
 import SemanticClarificationModal from './components/SemanticClarificationModal';
-import { 
-  AlertCircle, 
-  CheckSquare, 
-  Scale, 
-  Sparkles,
-  FileText
-} from 'lucide-react';
+import { cleanLegalText } from './utils/cleanLegalText';
+import { AlertCircle, CheckSquare, PenLine } from 'lucide-react';
+import { DEFAULT_ACTIVE_COURTS } from './data/courts';
 
 const CHAVE_HISTORICO = 'juris_tjsp_historico_react';
 const CHAVE_TEMA = 'juris_tjsp_tema_react';
@@ -29,7 +25,11 @@ export default function App() {
   const [filterChamber, setFilterChamber] = useState('all');
   const [pdfData, setPdfData] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [selectedTribunal, setSelectedTribunal] = useState('tjsp');
+  const [activeCourtCodes, setActiveCourtCodes] = useState(new Set(DEFAULT_ACTIVE_COURTS));
+  const [selectedCourtCodes, setSelectedCourtCodes] = useState(new Set(DEFAULT_ACTIVE_COURTS));
+  const [courtBackendCodes, setCourtBackendCodes] = useState(
+    new Map(DEFAULT_ACTIVE_COURTS.map((code) => [code, code])),
+  );
 
   // Vocabulário Semântico e Desambiguação
   const [isSemanticModalOpen, setIsSemanticModalOpen] = useState(false);
@@ -60,6 +60,26 @@ export default function App() {
     fetch('/saude')
       .then((res) => setOnline(res.ok))
       .catch(() => setOnline(false));
+
+    fetch('/tribunais')
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Falha ao listar tribunais'))))
+      .then((tribunais) => {
+        const backendCodes = new Map();
+        tribunais.filter((item) => item.ativo).forEach((item) => {
+          const canonicalCode = item.codigo.replace(/^datajud_/, '');
+          const currentCode = backendCodes.get(canonicalCode);
+          const nativeAdapter = !item.codigo.startsWith('datajud_');
+          if (!currentCode || (currentCode.startsWith('datajud_') && nativeAdapter)) {
+            backendCodes.set(canonicalCode, item.codigo);
+          }
+        });
+        setCourtBackendCodes(backendCodes);
+        setActiveCourtCodes(new Set(backendCodes.keys()));
+        setSelectedCourtCodes((current) => new Set(
+          [...current].filter((code) => backendCodes.has(code)),
+        ));
+      })
+      .catch(() => {});
 
     if (window.innerWidth < 1024) {
       setIsSidebarOpen(false);
@@ -100,22 +120,28 @@ export default function App() {
   const handleSearch = async (customQuery = null) => {
     const queryToSearch = customQuery || prompt;
     if (!queryToSearch || !queryToSearch.trim() || loading) return;
+    if (selectedCourtCodes.size === 0) {
+      setError('Selecione pelo menos um tribunal ativo para pesquisar.');
+      return;
+    }
 
     setError(null);
     setLoading(true);
     setIsSemanticModalOpen(false);
-    setThinkingStep('Consultando repositório jurisprudencial do TJSP...');
+    setThinkingStep('Consultando jurisprudência nos tribunais brasileiros...');
     saveToHistory(queryToSearch.trim());
     setSelectedIds(new Set());
 
     try {
-      const response = await fetch('/tjsp/pesquisa-assistida/stream', {
+      const response = await fetch('/pesquisa-assistida/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pergunta: queryToSearch.trim(),
           contexto_caso: '',
-          tribunal: selectedTribunal,
+          tribunal: [...selectedCourtCodes]
+            .map((code) => courtBackendCodes.get(code) || code)
+            .join(','),
         }),
       });
 
@@ -248,7 +274,7 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok && data.minuta) {
-        setDraftText(data.minuta);
+        setDraftText(cleanLegalText(data.minuta));
         setIsDraftingOpen(true);
       } else {
         alert(data.detail || 'Falha ao gerar minuta da petição.');
@@ -273,10 +299,11 @@ export default function App() {
 
   return (
     <div className="studio-app">
-      <Header 
-        theme={theme} 
-        toggleTheme={toggleTheme} 
-        online={online} 
+      <a className="skip-link" href="#conteudo-principal">Ir para conteúdo</a>
+      <Header
+        theme={theme}
+        toggleTheme={toggleTheme}
+        online={online}
         toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isSidebarOpen={isSidebarOpen}
       />
@@ -296,23 +323,33 @@ export default function App() {
           selectedChamberFilter={filterChamber}
           onSelectChamberFilter={(chamber) => setFilterChamber(chamber)}
           selectedCount={selectedIds.size}
-          onSelectPreset={(query) => {
-            setPrompt(query);
-            handleSearch(query);
-          }}
+          activeCourtCodes={activeCourtCodes}
+          selectedCourtCodes={selectedCourtCodes}
+          onCourtSelectionChange={setSelectedCourtCodes}
+          loading={loading}
         />
 
-        <main className="studio-main">
+        {isSidebarOpen && (
+          <button
+            type="button"
+            className="sidebar-backdrop"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Fechar arquivo de pesquisa"
+          />
+        )}
+
+        <main id="conteudo-principal" className="studio-main">
           <div className="studio-main-inner">
+            <h1 className="sr-only">Juris — pesquisa de precedentes</h1>
             {!results && (
               <section className="workbench-hero">
-                <div className="court-badge-pill">
-                  <Scale size={13} /> Tribunal de Justiça de São Paulo
-                </div>
-                <h2 className="workbench-title">Inteligência Jurisprudencial</h2>
+                <div className="hero-index" aria-hidden="true">01 / PESQUISA</div>
+                <h2 className="workbench-title">Encontre o precedente que sustenta o argumento.</h2>
                 <p className="workbench-desc">
-                  Pesquisa assistida em acórdãos oficiais do TJSP. Análise fática automatizada, teses dominantes e geração de minutas para petições.
+                  Descreva fatos e controvérsia. O sistema confronta acórdãos oficiais,
+                  aponta aderência e organiza fundamentos prontos para revisão jurídica.
                 </p>
+                <div className="hero-rule"><span>Acervo oficial</span><span>Análise rastreável</span><span>Minuta editável</span></div>
               </section>
             )}
 
@@ -321,8 +358,6 @@ export default function App() {
               setPrompt={setPrompt}
               onSubmit={() => handleSearch()}
               loading={loading}
-              selectedTribunal={selectedTribunal}
-              onSelectTribunal={(trib) => setSelectedTribunal(trib)}
               onSelectQuickTag={(tag) => {
                 setPrompt(tag);
                 handleSearch(tag);
@@ -332,26 +367,23 @@ export default function App() {
                 setClarificationTheme('');
                 setIsSemanticModalOpen(true);
               }}
+              selectedCourtCodes={selectedCourtCodes}
             />
 
             {loading && (
-              <div className="thinking-radar-card">
-                <div className="radar-spinner-wrap">
-                  <div className="radar-glow-ring" />
-                  <div className="radar-center-dot" />
-                </div>
+              <div className="thinking-radar-card" role="status" aria-live="polite">
+                <span className="thinking-index">02</span>
                 <div className="thinking-radar-info">
-                  <strong className="thinking-stage-title">{thinkingStep || 'Consultando acórdãos no TJSP...'}</strong>
-                  <span className="thinking-stage-detail">
-                    Análise semântica, cálculo de aderência fática e curadoria dos julgados em andamento...
-                  </span>
+                  <strong className="thinking-stage-title">{thinkingStep || 'Consultando acórdãos oficiais'}</strong>
+                  <span className="thinking-stage-detail">Triagem semântica e leitura comparada em andamento.</span>
                 </div>
+                <span className="thinking-progress" aria-hidden="true" />
               </div>
             )}
 
             {error && (
-              <div className="studio-error-banner">
-                <AlertCircle size={18} />
+              <div className="studio-error-banner" role="alert">
+                <AlertCircle size={18} aria-hidden="true" />
                 <span>{error}</span>
               </div>
             )}
@@ -360,12 +392,12 @@ export default function App() {
               <section className="results-feed">
                 <div className="feed-header-bar">
                   <div className="feed-header-info">
-                    <span className="feed-tag">Relatório Jurisprudencial</span>
-                    <h3 className="feed-theme-title">{results.tema || 'Tese Jurídica'}</h3>
+                    <span className="feed-tag">02 / Caderno de resultados</span>
+                    <h2 className="feed-theme-title">{results.tema || 'Tese jurídica'}</h2>
                     <div className="feed-stats-sub">
-                      <span><strong>{filteredDecisions.length}</strong> acórdão(s) filtrado(s)</span>
-                      <span>•</span>
-                      <span><strong>{(results.processos || []).length}</strong> precedentes localizados no TJSP</span>
+                      <span><strong>{filteredDecisions.length}</strong> exibidos</span>
+                      <span aria-hidden="true">/</span>
+                      <span><strong>{(results.processos || []).length}</strong> precedentes localizados</span>
                     </div>
                   </div>
 
@@ -375,8 +407,8 @@ export default function App() {
                       className="btn-select-batch"
                       onClick={selectedIds.size === (results.processos || []).length ? clearSelection : selectAll}
                     >
-                      <CheckSquare size={13} />
-                      <span>{selectedIds.size === (results.processos || []).length ? 'Desmarcar Todos' : 'Selecionar Todos'}</span>
+                      <CheckSquare size={14} aria-hidden="true" />
+                      <span>{selectedIds.size === (results.processos || []).length ? 'Limpar seleção' : 'Selecionar todos'}</span>
                     </button>
                   </div>
                 </div>
@@ -384,7 +416,8 @@ export default function App() {
                 <div className="precedents-list">
                   {filteredDecisions.map((decisao, idx) => (
                     <DecisionCard
-                      key={idx}
+                      key={decisao.cd_acordao || decisao.processo || idx}
+                      index={idx}
                       decisao={decisao}
                       isSelected={selectedIds.has(String(decisao.cd_acordao))}
                       onToggleSelect={() => toggleSelect(decisao.cd_acordao)}
@@ -398,34 +431,30 @@ export default function App() {
         </main>
       </div>
 
-      {/* Floating Action Dock for Drafting */}
       {selectedIds.size > 0 && (
         <aside className="drafting-floating-dock" aria-label="Ações de minuta jurídica">
           <div className="dock-info">
             <span className="dock-count-badge">{selectedIds.size}</span>
-            <span className="dock-count-label">acórdão(s) selecionado(s)</span>
+            <span className="dock-count-label">precedente{selectedIds.size === 1 ? '' : 's'} no caderno</span>
           </div>
-
           <button
             type="button"
             className="dock-generate-btn"
             onClick={handleGenerateDraft}
             disabled={generatingDraft}
           >
-            <Sparkles size={14} />
-            <span>{generatingDraft ? 'Gerando minuta...' : 'Gerar Argumentação da Petição'}</span>
+            <PenLine size={15} aria-hidden="true" />
+            <span>{generatingDraft ? 'Compondo minuta' : 'Abrir mesa de redação'}</span>
           </button>
         </aside>
       )}
 
-      {/* Official Court PDF Drawer */}
       <PdfDrawer
         isOpen={!!pdfData}
         onClose={() => setPdfData(null)}
         pdfData={pdfData}
       />
 
-      {/* Legal Drafting Studio Modal */}
       <DraftingCanvas
         isOpen={isDraftingOpen}
         onClose={() => setIsDraftingOpen(false)}
@@ -436,7 +465,6 @@ export default function App() {
         topic={results?.tema}
       />
 
-      {/* Semantic Disambiguation Questionnaire Modal */}
       <SemanticClarificationModal
         isOpen={isSemanticModalOpen}
         onClose={() => setIsSemanticModalOpen(false)}

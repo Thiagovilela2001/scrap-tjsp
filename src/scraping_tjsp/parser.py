@@ -13,12 +13,19 @@ BASE_URL = "https://esaj.tjsp.jus.br/cjsg/getArquivo.do"
 RESULTADOS_POR_PAGINA = 20
 
 
-def parsear_pagina(html: str | bytes) -> tuple[int, list[Decisao]]:
+def parsear_pagina(
+    html: str | bytes,
+    *,
+    inteiro_teor_base_url: str = BASE_URL,
+) -> tuple[int, list[Decisao]]:
     soup = BeautifulSoup(html, "html.parser")
     _validar_pagina(soup)
     linhas = soup.select("tr.fundocinza1, tr.fundocinza2")
     total = _extrair_total(soup, len(linhas))
-    decisoes = [_parsear_decisao(linha) for linha in linhas]
+    decisoes = [
+        _parsear_decisao(linha, inteiro_teor_base_url=inteiro_teor_base_url)
+        for linha in linhas
+    ]
     return total, decisoes
 
 
@@ -68,7 +75,11 @@ def _extrair_total(soup: BeautifulSoup, quantidade_linhas: int) -> int:
     )
 
 
-def _parsear_decisao(linha: Tag) -> Decisao:
+def _parsear_decisao(
+    linha: Tag,
+    *,
+    inteiro_teor_base_url: str = BASE_URL,
+) -> Decisao:
     link = linha.select_one("a.downloadEmenta[cdacordao]")
     if link is None:
         raise RuntimeError("Resultado sem identificador de acórdão.")
@@ -82,7 +93,10 @@ def _parsear_decisao(linha: Tag) -> Decisao:
 
     ementa = _ementa_completa(linha)
     ocorrencias = _ocorrencias(linha)
-    inteiro_teor_url = f"{BASE_URL}?{urlencode({'casChecked': 'true', 'cdAcordao': cd_acordao, 'cdForo': cd_foro})}"
+    parametros = urlencode(
+        {"casChecked": "true", "cdAcordao": cd_acordao, "cdForo": cd_foro}
+    )
+    inteiro_teor_url = f"{inteiro_teor_base_url}?{parametros}"
 
     return Decisao(
         processo=processo,
@@ -123,6 +137,50 @@ def _campos_rotulados(linha: Tag) -> dict[str, str]:
     return campos
 
 
+def limpar_quebras_juridicas(texto: str) -> str:
+    """Corrige quebras de linha fragmentadas preservando parágrafos e tópicos."""
+    if not texto:
+        return ""
+    t = re.sub(r"\s*\n\s*([.,;:!?])", r"\1", texto)
+    linhas = [item.strip() for item in t.split("\n")]
+    resultado: list[str] = []
+
+    for linha in linhas:
+        if not linha:
+            if resultado and resultado[-1] != "":
+                resultado.append("")
+            continue
+
+        if not resultado or resultado[-1] == "":
+            resultado.append(linha)
+            continue
+
+        anterior = resultado[-1]
+        is_novo_topico = bool(
+            re.match(
+                r"^(?:[0-9]+[\.\)\-]|[IVXLCDM]+[\.\)\-]|\([a-z0-9]\))\s*",
+                linha,
+                re.IGNORECASE,
+            )
+        )
+        is_fim_paragrafo = anterior.endswith((".", ":", ";")) and not re.search(
+            r"\b(?:art|fls|inc|n|v|rel|dr|dra|exmo|des)\.$",
+            anterior,
+            re.IGNORECASE,
+        )
+
+        if is_novo_topico or (is_fim_paragrafo and len(anterior) > 40):
+            resultado.append(linha)
+        else:
+            resultado[-1] = f"{anterior} {linha}"
+
+    return "\n\n".join(
+        re.sub(r"[ \t]+", " ", bloco).strip()
+        for bloco in "\n".join(resultado).split("\n\n")
+        if bloco.strip()
+    )
+
+
 def _ementa_completa(linha: Tag) -> str:
     candidatos = linha.select('tr.ementaClass2 div[align="justify"]')
     textos: list[str] = []
@@ -130,7 +188,7 @@ def _ementa_completa(linha: Tag) -> str:
         texto = _texto(candidato, separador="\n")
         texto = re.sub(r"^Ementa\s*:\s*", "", texto, flags=re.IGNORECASE).strip()
         if texto:
-            textos.append(texto)
+            textos.append(limpar_quebras_juridicas(texto))
     if textos:
         return max(textos, key=len)
 
@@ -138,7 +196,11 @@ def _ementa_completa(linha: Tag) -> str:
         linha.select_one("a.downloadEmenta[cdacordao]").get("cdacordao", "")
     )
     sem_formatacao = linha.select_one(f"#textAreaDados_{identificador}")
-    return _texto(sem_formatacao, separador="\n") if sem_formatacao else ""
+    return (
+        limpar_quebras_juridicas(_texto(sem_formatacao, separador="\n"))
+        if sem_formatacao
+        else ""
+    )
 
 
 def _ocorrencias(linha: Tag) -> int | None:

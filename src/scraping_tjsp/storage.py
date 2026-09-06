@@ -135,6 +135,33 @@ class RepositorioSQLite:
             raise LookupError(f"PDF do acórdão {cd_acordao} não encontrado.")
         return dict(linha)
 
+    def obter_decisao(self, cd_acordao: str) -> Decisao | None:
+        cd_acordao = cd_acordao.strip()
+        if not cd_acordao.isdigit():
+            return None
+        with self._conectar() as conexao:
+            linha = conexao.execute(
+                "SELECT * FROM decisoes WHERE cd_acordao = ?",
+                (cd_acordao,),
+            ).fetchone()
+        if linha is None:
+            return None
+        return Decisao(
+            processo=linha["processo"],
+            cd_acordao=linha["cd_acordao"],
+            cd_foro=linha["cd_foro"],
+            classe=linha["classe"] or "",
+            assunto=linha["assunto"] or "",
+            relator=linha["relator"] or "",
+            comarca=linha["comarca"] or "",
+            orgao_julgador=linha["orgao_julgador"] or "",
+            data_julgamento=_data_br(linha["data_julgamento"]),
+            data_publicacao=_data_br(linha["data_publicacao"]),
+            ementa=linha["ementa"] or "",
+            inteiro_teor_url=linha["inteiro_teor_url"],
+            ocorrencias=linha["ocorrencias"],
+        )
+
     def registrar_documento(self, documento: DocumentoBaixado) -> None:
         with self._conectar() as conexao:
             decisao_id = self._id_decisao(conexao, documento.cd_acordao)

@@ -102,6 +102,14 @@ class Settings:
     maritaca_base_url: str = "https://chat.maritaca.ai/api"
     tessdata_prefix: str | None = None
 
+    # DataJud / CNJ
+    datajud_api_key: str = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+    datajud_base_url: str = "https://api-publica.datajud.cnj.jus.br"
+
+    # Captcha Solvers
+    captcha_solver_provider: str = "mock"
+    captcha_solver_api_key: str | None = None
+
     def __post_init__(self) -> None:
         if self.max_custo_brl <= 0:
             raise ValueError("TJSP_API_MAX_CUSTO_BRL deve ser positivo.")
@@ -192,6 +200,25 @@ class Settings:
             )
             or "https://chat.maritaca.ai/api",
             tessdata_prefix=_str_ambiente("TESSDATA_PREFIX", None, env_dict),
+            datajud_api_key=_str_ambiente(
+                "DATAJUD_API_KEY",
+                "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
+                env_dict,
+            )
+            or "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
+            datajud_base_url=_str_ambiente(
+                "DATAJUD_BASE_URL",
+                "https://api-publica.datajud.cnj.jus.br",
+                env_dict,
+            )
+            or "https://api-publica.datajud.cnj.jus.br",
+            captcha_solver_provider=_str_ambiente(
+                "CAPTCHA_SOLVER_PROVIDER", "mock", env_dict
+            )
+            or "mock",
+            captcha_solver_api_key=_str_ambiente(
+                "CAPTCHA_SOLVER_API_KEY", None, env_dict
+            ),
         )
 
 

@@ -23,7 +23,7 @@ import { saveAs } from 'file-saver';
  * - Precedent blockquotes: Indent 4cm, 10pt, single line spacing, italic
  */
 export async function exportDraftToDocx({
-  title = 'MINUTA DE JURISPRUDÊNCIA — TJSP',
+  title = 'MINUTA DE JURISPRUDÊNCIA',
   topic = '',
   draftText = '',
   selectedDecisions = [],
@@ -161,7 +161,7 @@ export async function exportDraftToDocx({
         spacing: { before: 400, after: 160 },
         children: [
           new TextRun({
-            text: 'PRECEDENTES JURISPRUDENCIAIS UTILIZADOS (TJSP)',
+            text: 'PRECEDENTES JURISPRUDENCIAIS UTILIZADOS',
             bold: true,
             font: 'Arial',
             size: 22,
@@ -174,9 +174,10 @@ export async function exportDraftToDocx({
     selectedDecisions.forEach((decisao, idx) => {
       const numProcesso = decisao.processo || `Acórdão nº ${decisao.cd_acordao}`;
       const relator = decisao.relator ? `Rel. Des. ${decisao.relator}` : '';
-      const orgao = decisao.orgao_julgador || 'TJSP';
+      const orgao = decisao.orgao_julgador || 'Tribunal';
+      const trib = decisao.tribunal || (decisao.orgao_julgador?.startsWith('TJ') ? decisao.orgao_julgador.slice(0, 4) : 'TJ');
       const data = decisao.data_julgamento ? `j. em ${decisao.data_julgamento}` : '';
-      const citation = `[${idx + 1}] TJSP; ${numProcesso}; ${orgao}; ${relator}; ${data}.`;
+      const citation = `[${idx + 1}] ${trib}; ${numProcesso}; ${orgao}; ${relator}; ${data}.`;
 
       paragraphs.push(
         new Paragraph({
@@ -216,7 +217,7 @@ export async function exportDraftToDocx({
                 alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({
-                    text: 'Juris TJSP Studio Pro • Pesquisa e Minuta Jurídica',
+                    text: 'Juris Studio Pro • Pesquisa e Minuta Jurídica',
                     font: 'Arial',
                     size: 16, // 8pt
                     color: '94A3B8',
@@ -267,7 +268,7 @@ export async function exportDraftToDocx({
   });
 
   const blob = await Packer.toBlob(doc);
-  const safeFilename = `Peticao_Minuta_TJSP_${new Date().toISOString().slice(0, 10)}.docx`;
+  const safeFilename = `Peticao_Minuta_${new Date().toISOString().slice(0, 10)}.docx`;
   saveAs(blob, safeFilename);
 }
 

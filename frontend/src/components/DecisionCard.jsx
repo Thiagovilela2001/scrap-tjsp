@@ -1,210 +1,101 @@
 import React, { useState } from 'react';
-import { 
-  FileText, 
-  ExternalLink, 
-  ChevronDown, 
-  ChevronUp, 
-  Copy, 
-  Check, 
-  Quote, 
-  Scale, 
-  UserCheck, 
-  Calendar,
-  AlertTriangle
-} from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Copy, FileText, Quote } from 'lucide-react';
 
-export default function DecisionCard({
-  decisao,
-  onOpenPdf,
-  isSelected,
-  onToggleSelect,
-}) {
+export default function DecisionCard({ decisao, onOpenPdf, isSelected, onToggleSelect, index = 0 }) {
   const [expanded, setExpanded] = useState(false);
   const [copiedNum, setCopiedNum] = useState(false);
   const [copiedCitation, setCopiedCitation] = useState(false);
 
   const numProcesso = decisao.processo || `Acórdão nº ${decisao.cd_acordao}`;
   const relevancia = decisao.relevancia != null ? Math.round(decisao.relevancia * 100) : null;
+  const courtSigla = decisao.tribunal || (decisao.orgao_julgador?.startsWith('TJ') ? decisao.orgao_julgador.slice(0, 4) : 'TJSP');
 
-  const courtSigla = decisao.tribunal || (decisao.orgao_julgador && decisao.orgao_julgador.startsWith('TJ') ? decisao.orgao_julgador.slice(0, 4) : 'TJSP');
-
-  // Format standard Brazilian judicial citation (ABNT / CPC)
-  const generateAbntCitation = () => {
-    const comarca = decisao.comarca ? `${decisao.comarca}, ` : '';
-    const orgao = decisao.orgao_julgador || courtSigla;
-    const relator = decisao.relator ? `Relator: ${decisao.relator}` : '';
-    const data = decisao.data_julgamento ? `j. em ${decisao.data_julgamento}` : '';
-    const details = [comarca, orgao, relator, data].filter(Boolean).join(', ');
-    return `${courtSigla}; Processo nº ${numProcesso}; ${details}; Disponível em: ${decisao.inteiro_teor_url || 'https://esaj.tjsp.jus.br'}.`;
+  const generateCitation = () => {
+    const details = [
+      decisao.comarca,
+      decisao.orgao_julgador || courtSigla,
+      decisao.relator ? `Rel. ${decisao.relator}` : '',
+      decisao.data_julgamento ? `j. ${decisao.data_julgamento}` : '',
+    ].filter(Boolean).join(', ');
+    return `${courtSigla}, ${numProcesso}, ${details}. Disponível em: ${decisao.inteiro_teor_url || 'portal oficial do tribunal'}.`;
   };
 
-  const handleCopyProcess = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(numProcesso);
-    setCopiedNum(true);
-    setTimeout(() => setCopiedNum(false), 2000);
-  };
-
-  const handleCopyCitation = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(generateAbntCitation());
-    setCopiedCitation(true);
-    setTimeout(() => setCopiedCitation(false), 2000);
+  const copyText = async (text, setCopied) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   };
 
   return (
     <article className={`precedent-card ${isSelected ? 'selected' : ''}`}>
-      {/* Top Header - Jusbrasil Style */}
-      <div className="card-top-row">
-        <div className="card-identity">
-          <label className="custom-checkbox-wrapper" title="Selecionar precedente para a minuta">
-            <input
-              type="checkbox"
-              checked={!!isSelected}
-              onChange={onToggleSelect}
-              className="custom-checkbox"
-            />
-            <span className="checkbox-box" />
-          </label>
+      <div className="precedent-index" aria-hidden="true">
+        <span>{String(index + 1).padStart(2, '0')}</span>
+        <span className="precedent-index-line" />
+      </div>
 
-          <div className="process-id-wrap">
-            <span className="court-prefix-tag">{courtSigla}</span>
-            <span className="process-number-text">{numProcesso}</span>
-            <button
-              type="button"
-              className="action-icon-btn"
-              onClick={handleCopyProcess}
-              title="Copiar número do processo"
-            >
-              {copiedNum ? <Check size={13} className="text-green" /> : <Copy size={13} />}
-            </button>
+      <div className="precedent-content">
+        <header className="card-top-row">
+          <div className="card-identity">
+            <label className="custom-checkbox-wrapper">
+              <input type="checkbox" checked={Boolean(isSelected)} onChange={onToggleSelect} className="custom-checkbox" />
+              <span className="checkbox-box" aria-hidden="true">{isSelected && <Check size={12} />}</span>
+              <span className="sr-only">Selecionar {numProcesso} para minuta</span>
+            </label>
+            <div className="process-id-wrap">
+              <span className="court-prefix-tag">{courtSigla}</span>
+              <h3 className="process-number-text">{numProcesso}</h3>
+              <button type="button" className="action-icon-btn" onClick={() => copyText(numProcesso, setCopiedNum)} aria-label="Copiar número do processo">
+                {copiedNum ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div className="card-top-actions">
-          <button
-            type="button"
-            className="citation-quick-btn"
-            onClick={handleCopyCitation}
-            title="Copiar citação formatada para petição"
-          >
-            {copiedCitation ? (
-              <>
-                <Check size={12} className="text-green" />
-                <span>Citação Copiada</span>
-              </>
-            ) : (
-              <>
-                <Quote size={12} />
-                <span>Copiar Citação</span>
-              </>
-            )}
-          </button>
-
           {relevancia != null && (
-            <div className={`relevance-badge ${relevancia >= 85 ? 'high' : relevancia >= 70 ? 'medium' : 'normal'}`}>
-              <div className="relevance-dot" />
-              <span>{relevancia}% Aderência</span>
+            <div className="relevance-score" aria-label={`${relevancia}% de aderência`}>
+              <span className="relevance-number">{relevancia}</span><span className="relevance-percent">%</span>
+              <span className="relevance-label">aderência</span>
             </div>
           )}
-        </div>
-      </div>
+        </header>
 
-      {/* Metadata Line with Bullet Separators */}
-      <div className="metadata-chips-row">
-        {decisao.orgao_julgador && (
-          <span className="meta-chip">
-            <Scale size={12} /> {decisao.orgao_julgador}
-          </span>
-        )}
-        {decisao.relator && (
-          <>
-            <span className="metadata-divider">•</span>
-            <span className="meta-chip">
-              <UserCheck size={12} /> Rel. <strong>{decisao.relator}</strong>
-            </span>
-          </>
-        )}
-        {decisao.data_julgamento && (
-          <>
-            <span className="metadata-divider">•</span>
-            <span className="meta-chip">
-              <Calendar size={12} /> Julgado em {decisao.data_julgamento}
-            </span>
-          </>
-        )}
-        {decisao.classe && (
-          <>
-            <span className="metadata-divider">•</span>
-            <span className="meta-chip">{decisao.classe}</span>
-          </>
-        )}
-      </div>
+        <dl className="metadata-chips-row">
+          {decisao.orgao_julgador && <div className="meta-chip"><dt>Órgão</dt><dd>{decisao.orgao_julgador}</dd></div>}
+          {decisao.relator && <div className="meta-chip"><dt>Relatoria</dt><dd>{decisao.relator}</dd></div>}
+          {decisao.data_julgamento && <div className="meta-chip"><dt>Julgamento</dt><dd>{decisao.data_julgamento}</dd></div>}
+          {decisao.classe && <div className="meta-chip"><dt>Classe</dt><dd>{decisao.classe}</dd></div>}
+        </dl>
 
-      {/* Case Fit Analysis / Legal Thesis Callout */}
-      {(decisao.argumento || decisao.aderencia_fatica) && (
-        <div className="case-fit-panel">
-          <div className="case-fit-header">
-            <strong>Destaque da Tese & Aplicação ao Caso</strong>
-          </div>
-          <p className="case-fit-body">{decisao.argumento || decisao.aderencia_fatica}</p>
-          {decisao.ressalva && (
-            <div className="case-fit-caveat">
-              <AlertTriangle size={13} />
-              <span><strong>Observação:</strong> {decisao.ressalva}</span>
-            </div>
-          )}
-        </div>
-      )}
+        {(decisao.argumento || decisao.aderencia_fatica) && (
+          <section className="case-fit-panel" aria-label="Aplicação ao caso">
+            <span className="case-fit-header">Aplicação ao caso</span>
+            <p className="case-fit-body">{decisao.argumento || decisao.aderencia_fatica}</p>
+            {decisao.ressalva && <div className="case-fit-caveat"><AlertTriangle size={14} aria-hidden="true" /><span><strong>Ressalva:</strong> {decisao.ressalva}</span></div>}
+          </section>
+        )}
 
-      {/* Official Court Ementa Accordion */}
-      {decisao.ementa && (
-        <div className="ementa-section">
-          <button
-            type="button"
-            className="ementa-toggle-btn"
-            onClick={() => setExpanded(!expanded)}
-          >
-            <span>{expanded ? 'Ocultar Ementa Completa' : 'Exibir Ementa Oficial do Acórdão'}</span>
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {decisao.ementa && (
+          <section className={`ementa-section ${expanded ? 'expanded' : ''}`}>
+            <button type="button" className="ementa-toggle-btn" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+              <span>{expanded ? 'Recolher ementa' : 'Ler ementa oficial'}</span>
+              <ChevronDown size={15} aria-hidden="true" />
+            </button>
+            {expanded && <blockquote className="ementa-content-box"><p className="ementa-text">{decisao.ementa}</p></blockquote>}
+          </section>
+        )}
+
+        <footer className="card-action-footer">
+          <button className="btn-read-pdf" type="button" onClick={() => onOpenPdf(`/documentos/${decisao.cd_acordao}`, numProcesso, decisao.orgao_julgador || 'Documento oficial')}>
+            <FileText size={15} aria-hidden="true" /> Inteiro teor
           </button>
-
-          {expanded && (
-            <div className="ementa-content-box">
-              <p className="ementa-text">{decisao.ementa}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Card Action Footer */}
-      <div className="card-action-footer">
-        <button
-          className="btn-read-pdf"
-          type="button"
-          onClick={() =>
-            onOpenPdf(
-              `/documentos/${decisao.cd_acordao}`,
-              numProcesso,
-              decisao.orgao_julgador || 'Acórdão Oficial TJSP'
-            )
-          }
-        >
-          <FileText size={14} />
-          <span>Visualizar Inteiro Teor (PDF)</span>
-        </button>
-
-        {decisao.inteiro_teor_url && (
-          <a
-            className="btn-tribunal-ext"
-            href={decisao.inteiro_teor_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>Consultar no e-SAJ TJSP</span>
-            <ExternalLink size={12} />
-          </a>
-        )}
+          <button type="button" className="citation-quick-btn" onClick={() => copyText(generateCitation(), setCopiedCitation)}>
+            {copiedCitation ? <Check size={14} aria-hidden="true" /> : <Quote size={14} aria-hidden="true" />}
+            {copiedCitation ? 'Citação copiada' : 'Copiar citação'}
+          </button>
+          {decisao.inteiro_teor_url && <a className="btn-tribunal-ext" href={decisao.inteiro_teor_url} target="_blank" rel="noreferrer">Portal do tribunal <ArrowUpRight size={14} aria-hidden="true" /></a>}
+        </footer>
       </div>
     </article>
   );
