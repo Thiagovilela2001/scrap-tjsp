@@ -195,6 +195,36 @@ class AnaliseDocumentalTJSP:
             ),
         }
 
+    def analisar_stream(
+        self,
+        pergunta: str,
+        cd_acordaos: list[str],
+        *,
+        contexto_caso: str = "",
+        modelo: str | None = None,
+        max_custo_brl: float = 0.20,
+    ):
+        yield {
+            "tipo": "progresso",
+            "etapa": "recuperacao",
+            "progresso": 20,
+            "mensagem": "Recuperando trechos relevantes dos acórdãos selecionados...",
+        }
+        resultado = self.analisar(
+            pergunta,
+            cd_acordaos,
+            contexto_caso=contexto_caso,
+            modelo=modelo,
+            max_custo_brl=max_custo_brl,
+        )
+        yield {
+            "tipo": "progresso",
+            "etapa": "conclusao",
+            "progresso": 100,
+            "mensagem": "Análise documental concluída.",
+        }
+        yield {"tipo": "resultado", "dados": resultado}
+
     def _preparar_pacote(
         self,
         pergunta: str,

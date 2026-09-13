@@ -103,7 +103,9 @@ class Settings:
     tessdata_prefix: str | None = None
 
     # DataJud / CNJ
-    datajud_api_key: str = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+    datajud_api_key: str = (
+        "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+    )
     datajud_base_url: str = "https://api-publica.datajud.cnj.jus.br"
 
     # Captcha Solvers
@@ -127,10 +129,7 @@ class Settings:
             raise ValueError("TJSP_API_MAX_CUSTO_ANALISE_BRL deve ser positivo.")
         if self.tamanho_chunk < 100:
             raise ValueError("tamanho_chunk deve ser pelo menos 100.")
-        if (
-            self.sobreposicao_chunk < 0
-            or self.sobreposicao_chunk >= self.tamanho_chunk
-        ):
+        if self.sobreposicao_chunk < 0 or self.sobreposicao_chunk >= self.tamanho_chunk:
             raise ValueError(
                 "sobreposicao_chunk deve ser não-negativo e menor que tamanho_chunk."
             )
@@ -163,26 +162,16 @@ class Settings:
             saida_path=_path_ambiente(
                 "TJSP_SAIDA_PATH", Path("output/resultados.jsonl"), env_dict
             ),
-            intervalo_tjsp=_float_ambiente(
-                "TJSP_API_INTERVALO_TJSP", 2.0, env_dict
-            ),
-            max_paginas_tjsp=_int_ambiente(
-                "TJSP_API_MAX_PAGINAS_TJSP", 1, env_dict
-            ),
+            intervalo_tjsp=_float_ambiente("TJSP_API_INTERVALO_TJSP", 2.0, env_dict),
+            max_paginas_tjsp=_int_ambiente("TJSP_API_MAX_PAGINAS_TJSP", 1, env_dict),
             max_importacao_pdfs=_int_ambiente(
                 "TJSP_API_MAX_IMPORTACAO_PDFS", 5, env_dict
             ),
             max_mb_pdf=_int_ambiente("TJSP_API_MAX_MB_PDF", 50, env_dict),
-            habilitar_ocr=_bool_ambiente(
-                "TJSP_API_HABILITAR_OCR", True, env_dict
-            ),
+            habilitar_ocr=_bool_ambiente("TJSP_API_HABILITAR_OCR", True, env_dict),
             tamanho_chunk=_int_ambiente("TJSP_TAMANHO_CHUNK", 1500, env_dict),
-            sobreposicao_chunk=_int_ambiente(
-                "TJSP_SOBREPOSICAO_CHUNK", 200, env_dict
-            ),
-            max_custo_brl=_float_ambiente(
-                "TJSP_API_MAX_CUSTO_BRL", 0.10, env_dict
-            ),
+            sobreposicao_chunk=_int_ambiente("TJSP_SOBREPOSICAO_CHUNK", 200, env_dict),
+            max_custo_brl=_float_ambiente("TJSP_API_MAX_CUSTO_BRL", 0.10, env_dict),
             max_output_tokens=_int_ambiente(
                 "TJSP_API_MAX_OUTPUT_TOKENS", 2_000, env_dict
             ),

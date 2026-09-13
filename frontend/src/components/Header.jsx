@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import React from 'react';
 import { Moon, PanelLeft, Sun } from 'lucide-react';
 
@@ -5,7 +6,7 @@ export default function Header({ theme, toggleTheme, online, toggleSidebar, isSi
   return (
     <header className="header">
       <div className="header-left">
-        <button
+        <Button variant="ghost" size="icon"
           type="button"
           className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
           onClick={toggleSidebar}
@@ -14,7 +15,7 @@ export default function Header({ theme, toggleTheme, online, toggleSidebar, isSi
           aria-controls="research-sidebar"
         >
           <PanelLeft size={17} aria-hidden="true" />
-        </button>
+        </Button>
         <div className="brand" aria-label="Juris">
           <span className="brand-monogram" aria-hidden="true">J.</span>
           <span className="brand-wordmark">Juris</span>
@@ -27,14 +28,14 @@ export default function Header({ theme, toggleTheme, online, toggleSidebar, isSi
           <span className={`status-dot ${online ? 'online' : 'offline'}`} aria-hidden="true" />
           <span>{online ? 'Base disponível' : 'Base indisponível'}</span>
         </div>
-        <button
+        <Button variant="ghost" size="icon"
           type="button"
           className="theme-toggle-btn"
           onClick={toggleTheme}
           aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
         >
           {theme === 'dark' ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
-        </button>
+        </Button>
       </div>
     </header>
   );

@@ -106,7 +106,9 @@ def test_chroma_batch_indexing(tmp_path: Path) -> None:
         caminho_local="data/pdfs/1001.pdf",
         sha256="abc1",
         total_paginas=1,
-        paginas=(PaginaExtraida(numero=1, texto="Texto página 1 doc 1", metodo="nativo"),),
+        paginas=(
+            PaginaExtraida(numero=1, texto="Texto página 1 doc 1", metodo="nativo"),
+        ),
         chunks=(
             ChunkJuridico(
                 cd_acordao="1001",
@@ -137,7 +139,9 @@ def test_chroma_batch_indexing(tmp_path: Path) -> None:
         caminho_local="data/pdfs/1002.pdf",
         sha256="abc2",
         total_paginas=1,
-        paginas=(PaginaExtraida(numero=1, texto="Texto página 1 doc 2", metodo="nativo"),),
+        paginas=(
+            PaginaExtraida(numero=1, texto="Texto página 1 doc 2", metodo="nativo"),
+        ),
         chunks=(
             ChunkJuridico(
                 cd_acordao="1002",

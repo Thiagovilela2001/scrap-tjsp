@@ -29,9 +29,7 @@ class ProvedorMaritaca:
         cliente=None,
     ) -> None:
         chave = (
-            api_key
-            if api_key is not None
-            else os.environ.get("MARITACA_API_KEY", "")
+            api_key if api_key is not None else os.environ.get("MARITACA_API_KEY", "")
         )
         if not chave or not chave.strip():
             raise ErroMaritaca(

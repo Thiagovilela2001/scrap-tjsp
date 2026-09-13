@@ -1,5 +1,13 @@
+import { Toaster } from "@/components/ui/sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
+import MobileNavigation from './components/MobileNavigation';
+import MobileSearchScope from './components/MobileSearchScope';
+import useMobileLayout from './hooks/useMobileLayout';
 import Sidebar from './components/Sidebar';
 import PromptBox from './components/PromptBox';
 import DecisionCard from './components/DecisionCard';
@@ -14,6 +22,15 @@ const CHAVE_HISTORICO = 'juris_tjsp_historico_react';
 const CHAVE_TEMA = 'juris_tjsp_tema_react';
 
 export default function App() {
+  const isMobile = useMobileLayout();
+  const [mobileView, setMobileView] = useState('search');
+  const navigateMobile = (view) => {
+    setMobileView(view);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      document.getElementById('mobile-view-title')?.focus({ preventScroll: true });
+    });
+  };
   const [theme, setTheme] = useState('light');
   const [online, setOnline] = useState(true);
   const [prompt, setPrompt] = useState('');
@@ -122,11 +139,14 @@ export default function App() {
     if (!queryToSearch || !queryToSearch.trim() || loading) return;
     if (selectedCourtCodes.size === 0) {
       setError('Selecione pelo menos um tribunal ativo para pesquisar.');
+      if (isMobile) navigateMobile('search');
       return;
     }
 
     setError(null);
     setLoading(true);
+    if (isMobile) navigateMobile('results');
+    else setMobileView('results');
     setIsSemanticModalOpen(false);
     setThinkingStep('Consultando jurisprudência nos tribunais brasileiros...');
     saveToHistory(queryToSearch.trim());
@@ -218,6 +238,7 @@ export default function App() {
           setClarificationTheme(finalData.tema || queryToSearch);
           setIsSemanticModalOpen(true);
           setResults(null);
+          setMobileView('search');
         } else {
           setResults(finalData);
           setFilterChamber('all');
@@ -277,10 +298,10 @@ export default function App() {
         setDraftText(cleanLegalText(data.minuta));
         setIsDraftingOpen(true);
       } else {
-        alert(data.detail || 'Falha ao gerar minuta da petição.');
+        toast.error(data.detail || 'Falha ao gerar minuta da petição.');
       }
     } catch {
-      alert('Erro de conexão ao gerar minuta da petição.');
+      toast.error('Erro de conexão ao gerar minuta da petição.');
     } finally {
       setGeneratingDraft(false);
     }
@@ -298,20 +319,22 @@ export default function App() {
   });
 
   return (
-    <div className="studio-app">
-      <a className="skip-link" href="#conteudo-principal">Ir para conteúdo</a>
+    <div className={`studio-app ${isMobile ? 'mobile-workspace' : ''}`} data-mobile-view={mobileView}>
+      <Toaster theme={theme} position="top-right" closeButton richColors />
+      <a className="skip-link" href={isMobile && mobileView === 'archive' ? '#research-sidebar' : '#conteudo-principal'}>Ir para conteúdo</a>
       <Header
         theme={theme}
         toggleTheme={toggleTheme}
         online={online}
-        toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        isSidebarOpen={isSidebarOpen}
+        toggleSidebar={() => isMobile ? navigateMobile(mobileView === 'archive' ? 'search' : 'archive') : setIsSidebarOpen(!isSidebarOpen)}
+        isSidebarOpen={isMobile ? mobileView === 'archive' : isSidebarOpen}
       />
 
       <div className="studio-body">
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
+        {(!isMobile || mobileView === 'archive') && <Sidebar
+          isMobile={isMobile}
+          isOpen={isMobile || isSidebarOpen}
+          onClose={() => isMobile ? navigateMobile('search') : setIsSidebarOpen(false)}
           history={history}
           onSelectHistory={(query) => {
             setPrompt(query);
@@ -321,15 +344,15 @@ export default function App() {
           onDeleteHistoryItem={handleDeleteHistoryItem}
           results={results}
           selectedChamberFilter={filterChamber}
-          onSelectChamberFilter={(chamber) => setFilterChamber(chamber)}
+          onSelectChamberFilter={(chamber) => { setFilterChamber(chamber); if (isMobile) navigateMobile('results'); }}
           selectedCount={selectedIds.size}
           activeCourtCodes={activeCourtCodes}
           selectedCourtCodes={selectedCourtCodes}
           onCourtSelectionChange={setSelectedCourtCodes}
           loading={loading}
-        />
+        />}
 
-        {isSidebarOpen && (
+        {!isMobile && isSidebarOpen && (
           <button
             type="button"
             className="sidebar-backdrop"
@@ -338,10 +361,15 @@ export default function App() {
           />
         )}
 
-        <main id="conteudo-principal" className="studio-main">
+        <main id="conteudo-principal" className="studio-main" hidden={isMobile && mobileView === 'archive'}>
           <div className="studio-main-inner">
             <h1 className="sr-only">Juris — pesquisa de precedentes</h1>
-            {!results && (
+            {isMobile && mobileView !== 'archive' && <header className="mobile-page-heading">
+              <span className="search-kicker">{mobileView === 'search' ? 'Pesquisa de precedentes' : 'Caderno de pesquisa'}</span>
+              <h2 id="mobile-view-title" tabIndex={-1}>{mobileView === 'search' ? 'Qual é o seu caso?' : 'Resultados'}</h2>
+              <p>{mobileView === 'search' ? 'Descreva a controvérsia. Encontre fundamentos em fontes oficiais.' : 'Compare os precedentes e selecione os que apoiam sua minuta.'}</p>
+            </header>}
+            {!isMobile && !results && (
               <section className="workbench-hero">
                 <div className="hero-index" aria-hidden="true">01 / PESQUISA</div>
                 <h2 className="workbench-title">Encontre o precedente que sustenta o argumento.</h2>
@@ -353,7 +381,9 @@ export default function App() {
               </section>
             )}
 
+            <div hidden={isMobile && mobileView !== 'search'}>
             <PromptBox
+              isMobile={isMobile}
               prompt={prompt}
               setPrompt={setPrompt}
               onSubmit={() => handleSearch()}
@@ -369,26 +399,39 @@ export default function App() {
               }}
               selectedCourtCodes={selectedCourtCodes}
             />
+            {isMobile && <MobileSearchScope activeCodes={activeCourtCodes} selectedCodes={selectedCourtCodes}
+              onChange={setSelectedCourtCodes} disabled={loading} />}
+            </div>
 
-            {loading && (
+            {loading && (!isMobile || mobileView === 'results') && (
               <div className="thinking-radar-card" role="status" aria-live="polite">
                 <span className="thinking-index">02</span>
                 <div className="thinking-radar-info">
                   <strong className="thinking-stage-title">{thinkingStep || 'Consultando acórdãos oficiais'}</strong>
                   <span className="thinking-stage-detail">Triagem semântica e leitura comparada em andamento.</span>
                 </div>
-                <span className="thinking-progress" aria-hidden="true" />
+                <div className="search-skeleton" aria-hidden="true">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-5/6" />
+                </div>
               </div>
             )}
 
             {error && (
-              <div className="studio-error-banner" role="alert">
+              <Alert variant="destructive" className="studio-error-banner">
                 <AlertCircle size={18} aria-hidden="true" />
-                <span>{error}</span>
-              </div>
+                <div><AlertTitle>Não foi possível concluir a pesquisa</AlertTitle>
+                <AlertDescription>{error}</AlertDescription></div>
+              </Alert>
             )}
 
-            {results && (
+            {isMobile && mobileView === 'results' && !results && !loading && !error && <div className="mobile-empty-state">
+              <h3>Seu caderno começa com uma pesquisa</h3>
+              <p>Os precedentes encontrados ficam aqui, prontos para leitura e seleção.</p>
+              <Button onClick={() => navigateMobile('search')}>Iniciar pesquisa</Button>
+            </div>}
+            {results && !loading && (!isMobile || mobileView === 'results') && (
               <section className="results-feed">
                 <div className="feed-header-bar">
                   <div className="feed-header-info">
@@ -402,18 +445,20 @@ export default function App() {
                   </div>
 
                   <div className="feed-header-actions">
-                    <button
+                    {isMobile && <Button variant="outline" onClick={() => navigateMobile('archive')}>Filtrar resultados</Button>}
+                    <Button variant="outline" size="default"
                       type="button"
                       className="btn-select-batch"
                       onClick={selectedIds.size === (results.processos || []).length ? clearSelection : selectAll}
                     >
                       <CheckSquare size={14} aria-hidden="true" />
                       <span>{selectedIds.size === (results.processos || []).length ? 'Limpar seleção' : 'Selecionar todos'}</span>
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 <div className="precedents-list">
+                  {filteredDecisions.length === 0 && <p className="mobile-empty-state">{(results.processos || []).length ? 'Nenhum precedente neste filtro. Escolha outro no Arquivo.' : 'Nenhum precedente encontrado. Ajuste os termos ou os tribunais da pesquisa.'}</p>}
                   {filteredDecisions.map((decisao, idx) => (
                     <DecisionCard
                       key={decisao.cd_acordao || decisao.processo || idx}
@@ -431,13 +476,16 @@ export default function App() {
         </main>
       </div>
 
-      {selectedIds.size > 0 && (
+      {isMobile && <MobileNavigation view={mobileView} onChange={navigateMobile}
+        resultCount={results?.processos?.length || 0} loading={loading} />}
+
+      {selectedIds.size > 0 && (!isMobile || mobileView === 'results') && (
         <aside className="drafting-floating-dock" aria-label="Ações de minuta jurídica">
           <div className="dock-info">
             <span className="dock-count-badge">{selectedIds.size}</span>
             <span className="dock-count-label">precedente{selectedIds.size === 1 ? '' : 's'} no caderno</span>
           </div>
-          <button
+          <Button variant="default" size="default"
             type="button"
             className="dock-generate-btn"
             onClick={handleGenerateDraft}
@@ -445,7 +493,7 @@ export default function App() {
           >
             <PenLine size={15} aria-hidden="true" />
             <span>{generatingDraft ? 'Compondo minuta' : 'Abrir mesa de redação'}</span>
-          </button>
+          </Button>
         </aside>
       )}
 

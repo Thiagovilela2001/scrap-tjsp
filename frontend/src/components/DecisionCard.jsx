@@ -1,3 +1,7 @@
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible } from '@base-ui/react/collapsible';
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import React, { useState } from 'react';
 import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Copy, FileText, Quote } from 'lucide-react';
 
@@ -24,8 +28,10 @@ export default function DecisionCard({ decisao, onOpenPdf, isSelected, onToggleS
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast.success('Texto copiado.');
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
+      toast.error('Não foi possível copiar. Tente novamente.');
       setCopied(false);
     }
   };
@@ -41,16 +47,15 @@ export default function DecisionCard({ decisao, onOpenPdf, isSelected, onToggleS
         <header className="card-top-row">
           <div className="card-identity">
             <label className="custom-checkbox-wrapper">
-              <input type="checkbox" checked={Boolean(isSelected)} onChange={onToggleSelect} className="custom-checkbox" />
-              <span className="checkbox-box" aria-hidden="true">{isSelected && <Check size={12} />}</span>
+              <Checkbox checked={Boolean(isSelected)} onCheckedChange={onToggleSelect} aria-label={`Selecionar ${numProcesso} para minuta`} />
               <span className="sr-only">Selecionar {numProcesso} para minuta</span>
             </label>
             <div className="process-id-wrap">
               <span className="court-prefix-tag">{courtSigla}</span>
               <h3 className="process-number-text">{numProcesso}</h3>
-              <button type="button" className="action-icon-btn" onClick={() => copyText(numProcesso, setCopiedNum)} aria-label="Copiar número do processo">
+              <Button variant="ghost" size="icon" type="button" className="action-icon-btn" onClick={() => copyText(numProcesso, setCopiedNum)} aria-label="Copiar número do processo">
                 {copiedNum ? <Check size={14} /> : <Copy size={14} />}
-              </button>
+              </Button>
             </div>
           </div>
           {relevancia != null && (
@@ -77,23 +82,23 @@ export default function DecisionCard({ decisao, onOpenPdf, isSelected, onToggleS
         )}
 
         {decisao.ementa && (
-          <section className={`ementa-section ${expanded ? 'expanded' : ''}`}>
-            <button type="button" className="ementa-toggle-btn" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+          <Collapsible.Root open={expanded} onOpenChange={setExpanded} render={<section />} className={`ementa-section ${expanded ? 'expanded' : ''}`}>
+            <Collapsible.Trigger render={<Button variant="ghost" size="default" />} type="button" className="ementa-toggle-btn">
               <span>{expanded ? 'Recolher ementa' : 'Ler ementa oficial'}</span>
               <ChevronDown size={15} aria-hidden="true" />
-            </button>
-            {expanded && <blockquote className="ementa-content-box"><p className="ementa-text">{decisao.ementa}</p></blockquote>}
-          </section>
+            </Collapsible.Trigger>
+            <Collapsible.Panel className="ementa-reveal"><blockquote className="ementa-content-box"><p className="ementa-text">{decisao.ementa}</p></blockquote></Collapsible.Panel>
+          </Collapsible.Root>
         )}
 
         <footer className="card-action-footer">
-          <button className="btn-read-pdf" type="button" onClick={() => onOpenPdf(`/documentos/${decisao.cd_acordao}`, numProcesso, decisao.orgao_julgador || 'Documento oficial')}>
+          <Button variant="outline" size="default" className="btn-read-pdf" type="button" onClick={() => onOpenPdf(`/documentos/${decisao.cd_acordao}`, numProcesso, decisao.orgao_julgador || 'Documento oficial')}>
             <FileText size={15} aria-hidden="true" /> Inteiro teor
-          </button>
-          <button type="button" className="citation-quick-btn" onClick={() => copyText(generateCitation(), setCopiedCitation)}>
+          </Button>
+          <Button variant="outline" size="default" type="button" className="citation-quick-btn" onClick={() => copyText(generateCitation(), setCopiedCitation)}>
             {copiedCitation ? <Check size={14} aria-hidden="true" /> : <Quote size={14} aria-hidden="true" />}
             {copiedCitation ? 'Citação copiada' : 'Copiar citação'}
-          </button>
+          </Button>
           {decisao.inteiro_teor_url && <a className="btn-tribunal-ext" href={decisao.inteiro_teor_url} target="_blank" rel="noreferrer">Portal do tribunal <ArrowUpRight size={14} aria-hidden="true" /></a>}
         </footer>
       </div>

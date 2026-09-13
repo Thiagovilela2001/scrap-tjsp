@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     intervalo_tjsp: float = 2.0
     max_pdfs: int = 20
     maritaca_api_key: str | None = None
+
     # ...
     class Config:
         env_file = ".env"
@@ -95,7 +96,7 @@ CREATE INDEX idx_chunks_fts_processo ON chunks_documento(processo);
 collection.metadata = {
     "embedding_model": "all-MiniLM-L6-v2",
     "dimension": 384,
-    "created_at": "2026-08-17"
+    "created_at": "2026-08-17",
 }
 ```
 Validar no `__init__` e rejeitar se divergir.
@@ -113,6 +114,7 @@ Validar no `__init__` e rejeitar se divergir.
 **Solução:** Middleware simples:
 ```python
 API_KEYS = {"default": os.environ.get("TJSP_API_KEY", "")}
+
 
 async def verify_api_key(x_api_key: str = Header(...)):
     if x_api_key not in API_KEYS.values():
@@ -156,7 +158,9 @@ async def perguntar(...):
 @app.middleware("http")
 async def security_headers(request, call_next):
     response = await call_next(request)
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    )
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
@@ -220,7 +224,7 @@ structlog.configure(
     processors=[
         structlog.processors.add_request_id,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer()
+        structlog.processors.JSONRenderer(),
     ]
 )
 logger = structlog.get_logger()
@@ -297,14 +301,18 @@ def indexar_lote(self, documentos: list[DocumentoComEmbedding]):
     embeddings = [d.embedding for d in documentos]
     metadatas = [d.metadata for d in documentos]
     texts = [d.texto for d in documentos]
-    self.collection.add(ids=ids, embeddings=embeddings, metadatas=metadatas, documents=texts)
+    self.collection.add(
+        ids=ids, embeddings=embeddings, metadatas=metadatas, documents=texts
+    )
 ```
 
 ### 6.3 Streaming PDF Download
 **Arquivo:** `src/scraping_tjsp/downloader.py`  
 **Solução:** Gravar direto em temp file:
 ```python
-with tempfile.NamedTemporaryFile(delete=False, dir=self.diretorio, suffix=".pdf") as tmp:
+with tempfile.NamedTemporaryFile(
+    delete=False, dir=self.diretorio, suffix=".pdf"
+) as tmp:
     for chunk in response.iter_content(chunk_size=8192):
         tmp.write(chunk)
     tmp.flush()

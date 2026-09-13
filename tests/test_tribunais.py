@@ -2,13 +2,34 @@ import pytest
 
 from scraping_tjsp.client import TJSPClient, tribunais_ativos
 
-
 TODOS_27_TJS = (
-    "tjac", "tjal", "tjap", "tjam", "tjba", "tjce",
-    "tjdft", "tjes", "tjgo", "tjma", "tjmt", "tjms",
-    "tjmg", "tjpa", "tjpb", "tjpr", "tjpe", "tjpi",
-    "tjrj", "tjrn", "tjrs", "tjro", "tjrr", "tjsc",
-    "tjsp", "tjse", "tjto",
+    "tjac",
+    "tjal",
+    "tjap",
+    "tjam",
+    "tjba",
+    "tjce",
+    "tjdft",
+    "tjes",
+    "tjgo",
+    "tjma",
+    "tjmt",
+    "tjms",
+    "tjmg",
+    "tjpa",
+    "tjpb",
+    "tjpr",
+    "tjpe",
+    "tjpi",
+    "tjrj",
+    "tjrn",
+    "tjrs",
+    "tjro",
+    "tjrr",
+    "tjsc",
+    "tjsp",
+    "tjse",
+    "tjto",
 )
 
 
@@ -113,4 +134,3 @@ def test_tribunais_superiores_ativos():
     assert "stf" in ativos
     cliente_stf = TJSPClient(tribunal="stf")
     assert cliente_stf.adapter.__class__.__name__ == "STFAdapter"
-

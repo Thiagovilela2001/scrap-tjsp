@@ -162,7 +162,9 @@ class STFAdapter:
                         f"{self.base_url}/pages/search"
                         f"?base=acordaos&queryString={query_enc}&page={pagina}"
                     )
-                    page.goto(url_busca, wait_until="networkidle", timeout=self.timeout_ms)
+                    page.goto(
+                        url_busca, wait_until="networkidle", timeout=self.timeout_ms
+                    )
                     page.remove_listener("response", on_response)
 
                     if not captured_data:
@@ -171,7 +173,9 @@ class STFAdapter:
                     data = captured_data[0]
                     result = data.get("result", {})
                     hits = result.get("hits", {})
-                    total_encontrado = hits.get("total", {}).get("value", total_encontrado)
+                    total_encontrado = hits.get("total", {}).get(
+                        "value", total_encontrado
+                    )
 
                     documentos = hits.get("hits", [])
                     if not documentos:

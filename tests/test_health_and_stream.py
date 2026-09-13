@@ -81,7 +81,9 @@ def test_pesquisa_assistida_progresso_callback() -> None:
                 "precisa_esclarecimento": False,
                 "questoes": [],
                 "tema": "Dano moral",
-                "consultas": [{"pesquisa": "dano moral atraso voo", "justificativa": "tese"}],
+                "consultas": [
+                    {"pesquisa": "dano moral atraso voo", "justificativa": "tese"}
+                ],
             }
         ),
         provedor="maritaca",
@@ -150,8 +152,16 @@ def test_pesquisa_assistida_stream_endpoint(tmp_path: Path) -> None:
 
     mock_pesquisa = MagicMock()
     mock_pesquisa.pesquisar_stream.return_value = [
-        {"tipo": "progresso", "etapa": "planejamento", "progresso": 15, "mensagem": "Planejando..."},
-        {"tipo": "resultado", "dados": {"status": "concluida", "tema": "Dano", "processos": []}},
+        {
+            "tipo": "progresso",
+            "etapa": "planejamento",
+            "progresso": 15,
+            "mensagem": "Planejando...",
+        },
+        {
+            "tipo": "resultado",
+            "dados": {"status": "concluida", "tema": "Dano", "processos": []},
+        },
     ]
 
     app = criar_app(
@@ -170,3 +180,47 @@ def test_pesquisa_assistida_stream_endpoint(tmp_path: Path) -> None:
     conteudo = resposta.text
     assert "data: " in conteudo
     assert "planejamento" in conteudo
+
+
+def test_analise_documental_stream_endpoint(tmp_path: Path) -> None:
+    config = ConfiguracaoAPI(
+        sqlite_path=tmp_path / "app.sqlite3",
+        chroma_path=tmp_path / "chroma",
+        diretorio_pdfs=tmp_path / "pdfs",
+    )
+    repo = RepositorioSQLite(config.sqlite_path)
+    repo.inicializar()
+
+    mock_analise = MagicMock()
+    mock_analise.analisar_stream.return_value = [
+        {
+            "tipo": "progresso",
+            "etapa": "recuperacao",
+            "progresso": 20,
+            "mensagem": "Recuperando...",
+        },
+        {
+            "tipo": "resultado",
+            "dados": {
+                "status": "concluida",
+                "resposta": "Fundamentação válida [Fonte 1].",
+            },
+        },
+    ]
+
+    app = criar_app(
+        configuracao=config,
+        repositorio=repo,
+        analise_documental=mock_analise,
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/tjsp/analisar-documentos/stream",
+        json={"pergunta": "Pergunta documental de teste", "cd_acordaos": ["1001"]},
+    )
+    assert resposta.status_code == 200
+    assert "text/event-stream" in resposta.headers.get("content-type", "")
+    conteudo = resposta.text
+    assert "data: " in conteudo
+    assert "recuperacao" in conteudo

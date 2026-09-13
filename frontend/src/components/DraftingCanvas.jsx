@@ -1,12 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { 
-  X, 
-  Copy, 
-  Check, 
-  Sparkles, 
-  Send, 
-  FileText, 
-  Download, 
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import React, { useRef, useState } from 'react';
+import {
+  X,
+  Copy,
+  Check,
+  Sparkles,
+  Send,
+  FileText,
+  Download,
   FileDown,
   RefreshCw,
   AlignLeft
@@ -37,29 +42,14 @@ export default function DraftingCanvas({
   const [exportingDocx, setExportingDocx] = useState(false);
   const closeButtonRef = useRef(null);
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const previousFocus = document.activeElement;
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
-    };
-    closeButtonRef.current?.focus();
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousFocus?.focus?.();
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(draft);
       setCopied(true);
+      toast.success('Minuta copiada.');
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      alert('Não foi possível acessar a área de transferência.');
+      toast.error('Não foi possível acessar a área de transferência.');
     }
   };
 
@@ -71,6 +61,7 @@ export default function DraftingCanvas({
     a.download = `minuta_jurisprudencia_tjsp_${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success('Download do arquivo TXT iniciado.');
   };
 
   const handleExportDocx = async () => {
@@ -83,9 +74,10 @@ export default function DraftingCanvas({
         draftText: draft,
         selectedDecisions,
       });
+      toast.success('Download do arquivo Word iniciado.');
     } catch (err) {
       console.error(err);
-      alert('Erro ao gerar arquivo Word (.docx).');
+      toast.error('Erro ao gerar arquivo Word (.docx).');
     } finally {
       setExportingDocx(false);
     }
@@ -111,11 +103,12 @@ export default function DraftingCanvas({
       if (res.ok && data.minuta) {
         setDraft(cleanLegalText(data.minuta));
         setChatInput('');
+        toast.success('Minuta revisada.');
       } else {
-        alert(data.detail || 'Erro ao ajustar minuta.');
+        toast.error(data.detail || 'Erro ao ajustar minuta.');
       }
     } catch {
-      alert('Falha ao comunicar com o assistente.');
+      toast.error('Falha ao comunicar com o assistente.');
     } finally {
       setRefining(false);
     }
@@ -124,16 +117,15 @@ export default function DraftingCanvas({
   const wordCount = draft ? draft.trim().split(/\s+/).length : 0;
 
   return (
-    <>
-      <div className="drawer-backdrop" onClick={onClose} />
-      <div className="drafting-modal-wrapper" role="dialog" aria-modal="true" aria-labelledby="drafting-title">
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="drafting-modal-wrapper" showCloseButton={false} initialFocus={closeButtonRef}>
         {/* Studio Top Header */}
         <div className="drafting-header">
           <div className="drafting-main-title">
-            <h2 id="drafting-title">Mesa de Redação</h2>
-            <div className="precedents-count-badge">
+            <DialogTitle>Mesa de Redação</DialogTitle>
+            <DialogDescription className="precedents-count-badge">
               {selectedDecisions?.length || 0} precedentes selecionados
-            </div>
+            </DialogDescription>
           </div>
 
           <div className="drafting-header-actions">
@@ -141,7 +133,7 @@ export default function DraftingCanvas({
               {wordCount} palavras
             </div>
 
-            <button
+            <Button variant="outline" size="default"
               type="button"
               className="draft-action-btn"
               onClick={() => setDraft(cleanLegalText(draft))}
@@ -149,9 +141,9 @@ export default function DraftingCanvas({
             >
               <AlignLeft size={13} />
               <span>Formatar</span>
-            </button>
+            </Button>
 
-            <button
+            <Button variant="outline" size="default"
               type="button"
               className="draft-action-btn docx-btn"
               onClick={handleExportDocx}
@@ -160,9 +152,9 @@ export default function DraftingCanvas({
             >
               <FileDown size={14} />
               <span>{exportingDocx ? 'Gerando Word...' : 'Exportar .docx'}</span>
-            </button>
+            </Button>
 
-            <button
+            <Button variant="outline" size="default"
               type="button"
               className="draft-action-btn"
               onClick={handleDownloadTxt}
@@ -170,9 +162,9 @@ export default function DraftingCanvas({
             >
               <Download size={13} />
               <span>.txt</span>
-            </button>
+            </Button>
 
-            <button
+            <Button variant="outline" size="default"
               type="button"
               className={`draft-action-btn primary ${copied ? 'copied' : ''}`}
               onClick={handleCopy}
@@ -180,23 +172,25 @@ export default function DraftingCanvas({
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
               <span>{copied ? 'Copiado!' : 'Copiar Petição'}</span>
-            </button>
+            </Button>
 
-            <button
+            <Button variant="ghost" size="icon"
               type="button"
               className="drafting-close-btn"
               onClick={onClose}
               aria-label="Fechar editor de minuta"
               ref={closeButtonRef}
+              tooltip={false}
             >
               <X size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Studio Editor Area */}
         <div className="drafting-editor-container">
-          <textarea
+          <Textarea
+            aria-label="Texto da minuta"
             className="drafting-editor-textarea"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -213,7 +207,7 @@ export default function DraftingCanvas({
             </span>
             <div className="quick-refine-chips">
               {QUICK_PROMPTS.map((promptText, idx) => (
-                <button
+                <Button variant="ghost" size="default"
                   key={idx}
                   type="button"
                   className="quick-refine-pill"
@@ -221,7 +215,7 @@ export default function DraftingCanvas({
                   disabled={refining}
                 >
                   {promptText}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -233,7 +227,8 @@ export default function DraftingCanvas({
               handleRefine();
             }}
           >
-            <input
+            <Input
+              aria-label="Instruções para revisar a minuta"
               type="text"
               className="draft-refine-input"
               value={chatInput}
@@ -242,7 +237,7 @@ export default function DraftingCanvas({
               disabled={refining}
             />
 
-            <button
+            <Button variant="default" size="default"
               type="submit"
               className="draft-refine-send-btn"
               disabled={refining || !chatInput.trim()}
@@ -256,10 +251,10 @@ export default function DraftingCanvas({
                   <span>Refinar</span>
                 </>
               )}
-            </button>
+            </Button>
           </form>
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

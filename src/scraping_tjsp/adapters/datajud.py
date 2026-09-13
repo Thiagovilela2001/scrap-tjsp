@@ -59,14 +59,10 @@ class DataJudAdapter:
             )
 
         if consulta.classe.strip():
-            must_clauses.append(
-                {"match": {"classe.nome": consulta.classe.strip()}}
-            )
+            must_clauses.append({"match": {"classe.nome": consulta.classe.strip()}})
 
         if consulta.assunto.strip():
-            must_clauses.append(
-                {"match": {"assuntos.nome": consulta.assunto.strip()}}
-            )
+            must_clauses.append({"match": {"assuntos.nome": consulta.assunto.strip()}})
 
         if consulta.orgao_julgador.strip():
             must_clauses.append(
@@ -76,8 +72,12 @@ class DataJudAdapter:
         query_body: dict[str, Any] = {
             "from": (pagina - 1) * tamanho,
             "size": tamanho,
-            "query": {"bool": {"must": must_clauses}} if must_clauses else {"match_all": {}},
-            "sort": [{"dataAjuizamento": {"order": "desc", "unmapped_type": "keyword"}}],
+            "query": {"bool": {"must": must_clauses}}
+            if must_clauses
+            else {"match_all": {}},
+            "sort": [
+                {"dataAjuizamento": {"order": "desc", "unmapped_type": "keyword"}}
+            ],
         }
         return query_body
 
@@ -161,11 +161,13 @@ class DataJudAdapter:
         # Extrai movimentos / ementa / histórico
         movimentos = source.get("movimentos", [])
         movimentos_nomes = [
-            str(m.get("nome", "")).strip()
-            for m in movimentos
-            if m.get("nome")
+            str(m.get("nome", "")).strip() for m in movimentos if m.get("nome")
         ]
-        ementa = f"Movimentações DataJud: {', '.join(movimentos_nomes[:5])}" if movimentos_nomes else "Dados processuais DataJud."
+        ementa = (
+            f"Movimentações DataJud: {', '.join(movimentos_nomes[:5])}"
+            if movimentos_nomes
+            else "Dados processuais DataJud."
+        )
 
         data_raw = (
             source.get("dataAjuizamento")
@@ -174,7 +176,9 @@ class DataJudAdapter:
         )
         data_formatada = self._formatar_data(data_raw)
 
-        inteiro_teor = f"{self.base_url}/{self.indice_tribunal}/_doc/{hit.get('_id', '')}"
+        inteiro_teor = (
+            f"{self.base_url}/{self.indice_tribunal}/_doc/{hit.get('_id', '')}"
+        )
 
         return Decisao(
             processo=numero_processo or doc_id,
@@ -254,9 +258,7 @@ class DataJudAdapter:
             "nome", "Órgão Julgador não informado"
         )
         assuntos = [
-            a.get("nome", "")
-            for a in source.get("assuntos", [])
-            if a.get("nome")
+            a.get("nome", "") for a in source.get("assuntos", []) if a.get("nome")
         ]
         assuntos_txt = "; ".join(assuntos) if assuntos else "Não informado"
         dt_ajuizamento = self._formatar_data(str(source.get("dataAjuizamento", "")))

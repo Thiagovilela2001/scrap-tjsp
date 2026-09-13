@@ -77,13 +77,19 @@ def test_settings_custom_env_dict() -> None:
 
 def test_settings_validations() -> None:
     with pytest.raises(ValueError, match="TJSP_API_MAX_CUSTO_BRL"):
-        Settings.carregar(carregar_dotenv=False, env_dict={"TJSP_API_MAX_CUSTO_BRL": "0"})
+        Settings.carregar(
+            carregar_dotenv=False, env_dict={"TJSP_API_MAX_CUSTO_BRL": "0"}
+        )
 
     with pytest.raises(ValueError, match="TJSP_API_INTERVALO_TJSP"):
-        Settings.carregar(carregar_dotenv=False, env_dict={"TJSP_API_INTERVALO_TJSP": "0.5"})
+        Settings.carregar(
+            carregar_dotenv=False, env_dict={"TJSP_API_INTERVALO_TJSP": "0.5"}
+        )
 
     with pytest.raises(ValueError, match="TJSP_API_MAX_OUTPUT_TOKENS"):
-        Settings.carregar(carregar_dotenv=False, env_dict={"TJSP_API_MAX_OUTPUT_TOKENS": "0"})
+        Settings.carregar(
+            carregar_dotenv=False, env_dict={"TJSP_API_MAX_OUTPUT_TOKENS": "0"}
+        )
 
     with pytest.raises(ValueError, match="tamanho_chunk"):
         Settings.carregar(carregar_dotenv=False, env_dict={"TJSP_TAMANHO_CHUNK": "50"})
@@ -95,13 +101,19 @@ def test_settings_validations() -> None:
         )
 
     with pytest.raises(ValueError, match="deve ser numérico"):
-        Settings.carregar(carregar_dotenv=False, env_dict={"TJSP_API_MAX_CUSTO_BRL": "abc"})
+        Settings.carregar(
+            carregar_dotenv=False, env_dict={"TJSP_API_MAX_CUSTO_BRL": "abc"}
+        )
 
     with pytest.raises(ValueError, match="deve ser inteiro"):
-        Settings.carregar(carregar_dotenv=False, env_dict={"TJSP_API_MAX_OUTPUT_TOKENS": "xyz"})
+        Settings.carregar(
+            carregar_dotenv=False, env_dict={"TJSP_API_MAX_OUTPUT_TOKENS": "xyz"}
+        )
 
     with pytest.raises(ValueError, match="deve ser booleano"):
-        Settings.carregar(carregar_dotenv=False, env_dict={"TJSP_API_HABILITAR_OCR": "talvez"})
+        Settings.carregar(
+            carregar_dotenv=False, env_dict={"TJSP_API_HABILITAR_OCR": "talvez"}
+        )
 
 
 def test_get_settings_caching() -> None:

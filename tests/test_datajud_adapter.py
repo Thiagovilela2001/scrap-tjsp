@@ -10,6 +10,7 @@ def _resposta_json(status: int, dados: dict) -> requests.Response:
     r.status_code = status
     r.headers["Content-Type"] = "application/json"
     import json
+
     r._content = json.dumps(dados).encode("utf-8")
     r._content_consumed = True
     return r
@@ -47,8 +48,12 @@ def test_montar_query_elasticsearch():
     assert payload["size"] == 10
     must = payload["query"]["bool"]["must"]
     assert any("multi_match" in clause for clause in must)
-    assert any(clause.get("match", {}).get("classe.nome") == "Apelação" for clause in must)
-    assert any(clause.get("match", {}).get("assuntos.nome") == "Indenização" for clause in must)
+    assert any(
+        clause.get("match", {}).get("classe.nome") == "Apelação" for clause in must
+    )
+    assert any(
+        clause.get("match", {}).get("assuntos.nome") == "Indenização" for clause in must
+    )
 
 
 def test_parsear_hit_datajud():
@@ -88,7 +93,9 @@ def test_pesquisar_datajud():
         )
 
     adapter = DataJudAdapter(sigla_tribunal="tjce")
-    resultado = adapter.pesquisar(requisitar, Consulta(pesquisa="dano moral"), max_paginas=1)
+    resultado = adapter.pesquisar(
+        requisitar, Consulta(pesquisa="dano moral"), max_paginas=1
+    )
 
     assert resultado.total_disponivel == 1
     assert resultado.paginas_coletadas == 1

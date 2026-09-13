@@ -12,7 +12,9 @@ from scraping_tjsp.client import TJSPClient
 from scraping_tjsp.settings import Settings
 
 
-def _resposta_http(status: int, conteudo: bytes, headers: dict | None = None) -> requests.Response:
+def _resposta_http(
+    status: int, conteudo: bytes, headers: dict | None = None
+) -> requests.Response:
     r = requests.Response()
     r.status_code = status
     r._content = conteudo
@@ -27,7 +29,10 @@ def test_mock_captcha_solver():
     assert solver.resolver_imagem(b"dummy_bytes") == "9999"
     assert solver.chamadas_imagem == 1
 
-    assert solver.resolver_recaptcha("sitekey123", "https://esaj.tjam.jus.br") == "token_abc"
+    assert (
+        solver.resolver_recaptcha("sitekey123", "https://esaj.tjam.jus.br")
+        == "token_abc"
+    )
     assert solver.chamadas_recaptcha == 1
 
     with pytest.raises(CaptchaError, match="vazio"):
@@ -79,7 +84,9 @@ def test_two_captcha_solver_fluxo_recaptcha():
             return _resposta_http(200, b'{"status": 1, "request": "REQ_RECAPTCHA"}')
 
         def get(self, url, params=None, **kwargs):
-            return _resposta_http(200, b'{"status": 1, "request": "TOKEN_VALIDO_RECAPTCHA"}')
+            return _resposta_http(
+                200, b'{"status": 1, "request": "TOKEN_VALIDO_RECAPTCHA"}'
+            )
 
     solver = TwoCaptchaSolver(
         api_key="minha_chave",
@@ -93,7 +100,9 @@ def test_two_captcha_solver_fluxo_recaptcha():
 def test_two_captcha_trata_rejeicao():
     class FakeSession:
         def post(self, url, data=None, **kwargs):
-            return _resposta_http(200, b'{"status": 0, "request": "ERROR_ZERO_BALANCE"}')
+            return _resposta_http(
+                200, b'{"status": 0, "request": "ERROR_ZERO_BALANCE"}'
+            )
 
     solver = TwoCaptchaSolver(
         api_key="minha_chave",
@@ -104,10 +113,14 @@ def test_two_captcha_trata_rejeicao():
 
 
 def test_obter_captcha_solver_factory():
-    st_mock = Settings.carregar(carregar_dotenv=False, env_dict={"CAPTCHA_SOLVER_PROVIDER": "mock"})
+    st_mock = Settings.carregar(
+        carregar_dotenv=False, env_dict={"CAPTCHA_SOLVER_PROVIDER": "mock"}
+    )
     assert isinstance(obter_captcha_solver(st_mock), MockCaptchaSolver)
 
-    st_local = Settings.carregar(carregar_dotenv=False, env_dict={"CAPTCHA_SOLVER_PROVIDER": "local"})
+    st_local = Settings.carregar(
+        carregar_dotenv=False, env_dict={"CAPTCHA_SOLVER_PROVIDER": "local"}
+    )
     assert isinstance(obter_captcha_solver(st_local), LocalVisualCaptchaSolver)
 
     st_2captcha_sem_key = Settings.carregar(
@@ -148,9 +161,13 @@ def test_obter_pdf_resolve_desafio_recaptcha_com_solver():
     def fake_request(metodo, url, **kwargs):
         chamadas.append((metodo, url, kwargs))
         if metodo == "GET":
-            return _resposta_http(200, html_captcha, {"Content-Type": "text/html;charset=UTF-8"})
+            return _resposta_http(
+                200, html_captcha, {"Content-Type": "text/html;charset=UTF-8"}
+            )
         if metodo == "POST":
-            return _resposta_http(200, conteudo_pdf, {"Content-Type": "application/pdf"})
+            return _resposta_http(
+                200, conteudo_pdf, {"Content-Type": "application/pdf"}
+            )
         raise ValueError("Metodo inesperado")
 
     solver_mock = MockCaptchaSolver(resposta_recaptcha="token_aprovado")

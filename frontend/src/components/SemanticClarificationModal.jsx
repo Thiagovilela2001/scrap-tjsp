@@ -1,9 +1,12 @@
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import React, { useEffect, useRef, useState } from 'react';
-import { 
-  X, 
+import {
+  X,
   Check,
-  Search, 
-  SlidersHorizontal, 
+  Search,
+  SlidersHorizontal,
   CheckCircle2
 } from 'lucide-react';
 import { SEMANTIC_BRANCHES, matchSemanticBranch, buildRefinedQuery } from '../utils/semanticVocabulary';
@@ -35,24 +38,8 @@ export default function SemanticClarificationModal({
     }
   }, [isOpen, initialQuery]);
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const previousFocus = document.activeElement;
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
-    };
-    closeButtonRef.current?.focus();
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousFocus?.focus?.();
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   const hasAiQuestions = aiQuestions && aiQuestions.length > 0;
-  
+
   const normalizedAiQuestions = hasAiQuestions
     ? aiQuestions.map((q, idx) => {
         if (typeof q === 'string') {
@@ -109,9 +96,8 @@ export default function SemanticClarificationModal({
   );
 
   return (
-    <>
-      <div className="drawer-backdrop" onClick={onClose} />
-      <div className="semantic-modal-wrapper" role="dialog" aria-modal="true" aria-labelledby="semantic-title">
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="semantic-modal-wrapper" showCloseButton={false} initialFocus={closeButtonRef}>
         {/* Header */}
         <div className="semantic-modal-header">
           <div className="semantic-title-group">
@@ -119,33 +105,35 @@ export default function SemanticClarificationModal({
               <SlidersHorizontal size={17} />
             </div>
             <div>
-              <h2 id="semantic-title" className="semantic-modal-title">Desambiguação e Refinamento Semântico</h2>
-              <span className="semantic-modal-desc">
+              <DialogTitle className="semantic-modal-title">Desambiguação e Refinamento Semântico</DialogTitle>
+              <DialogDescription className="semantic-modal-desc">
                 {hasAiQuestions
                   ? 'Especifique os contornos fáticos e teses para focar os precedentes mais aderentes:'
                   : 'Selecione os elementos fáticos e teses aplicáveis ao seu caso:'}
-              </span>
+              </DialogDescription>
             </div>
           </div>
 
-          <button
+          <Button variant="ghost" size="icon"
             type="button"
             className="drafting-close-btn"
             onClick={onClose}
             aria-label="Fechar formulário semântico"
             ref={closeButtonRef}
+              tooltip={false}
           >
             <X size={16} />
-          </button>
+          </Button>
         </div>
 
         {/* Branch Selector Tabs (Segmented Bar) */}
         {!hasAiQuestions && (
           <nav className="semantic-branch-tabs" aria-label="Ramos do Direito">
             {SEMANTIC_BRANCHES.map((b) => (
-              <button
+              <Button variant="ghost" size="default"
                 key={b.id}
                 type="button"
+                aria-pressed={selectedBranch?.id === b.id}
                 className={`semantic-branch-tab ${selectedBranch?.id === b.id ? 'active' : ''}`}
                 onClick={() => {
                   setSelectedBranch(b);
@@ -153,7 +141,7 @@ export default function SemanticClarificationModal({
                 }}
               >
                 {b.label}
-              </button>
+              </Button>
             ))}
           </nav>
         )}
@@ -180,9 +168,10 @@ export default function SemanticClarificationModal({
                   {q.options.map((opt, idx) => {
                     const isChecked = currentSelected.includes(opt);
                     return (
-                      <button
+                      <Button variant="ghost" size="default"
                         key={idx}
                         type="button"
+                        aria-pressed={isChecked}
                         className={`option-item-btn ${isChecked ? 'selected' : ''}`}
                         onClick={() => handleToggleOption(q.id, opt, q.multi)}
                       >
@@ -190,7 +179,7 @@ export default function SemanticClarificationModal({
                           {isChecked && <Check size={12} strokeWidth={3} />}
                         </div>
                         <span className="option-text-label">{opt}</span>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -200,10 +189,11 @@ export default function SemanticClarificationModal({
 
           {/* Additional details */}
           <div className="semantic-custom-box">
-            <label className="custom-box-label">
+            <label className="custom-box-label" htmlFor="semantic-custom-detail">
               Particularidade fática ou valor do dano (Opcional):
             </label>
-            <input
+            <Input
+              id="semantic-custom-detail"
               type="text"
               className="draft-refine-input"
               value={customDetail}
@@ -223,21 +213,21 @@ export default function SemanticClarificationModal({
           </div>
 
           <div className="semantic-footer-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <Button variant="outline" size="default" type="button" className="btn-secondary" onClick={onClose}>
               Cancelar
-            </button>
+            </Button>
 
-            <button
+            <Button variant="default" size="default"
               type="button"
               className="btn-primary"
               onClick={handleConfirm}
             >
               <Search size={14} />
               <span>Aplicar e Buscar Precedentes</span>
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

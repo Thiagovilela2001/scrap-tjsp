@@ -70,7 +70,8 @@ class LocalVisualCaptchaSolver(BaseCaptchaSolver):
 
             imagem = Image.open(io.BytesIO(conteudo_imagem))
             texto = pytesseract.image_to_string(
-                imagem, config="--psm 7 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                imagem,
+                config="--psm 7 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
             ).strip()
             if texto:
                 return texto

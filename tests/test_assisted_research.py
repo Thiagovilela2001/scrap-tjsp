@@ -222,7 +222,9 @@ def test_buscar_candidatos_todos_os_27_tjs(tmp_path: Path):
             tribunais_consultados.append(tribunal)
             return {
                 "consulta_id": 1,
-                "decisoes": [_decisao(f"id_{tribunal}", f"proc_{tribunal}").como_dict()],
+                "decisoes": [
+                    _decisao(f"id_{tribunal}", f"proc_{tribunal}").como_dict()
+                ],
             }
 
     pesquisa = PesquisaAssistidaTJSP(
@@ -231,7 +233,7 @@ def test_buscar_candidatos_todos_os_27_tjs(tmp_path: Path):
         FabricaProvedores([]),
     )
 
-    candidatos, executadas = pesquisa._buscar_candidatos(
+    candidatos, _executadas = pesquisa._buscar_candidatos(
         [{"pesquisa": "teste"}],
         tribunal="todos",
     )
@@ -240,4 +242,3 @@ def test_buscar_candidatos_todos_os_27_tjs(tmp_path: Path):
     for tj in TODOS_TJS:
         assert tj in tribunais_consultados
     assert len(candidatos) == 20  # bounded by max_candidatos (20)
-

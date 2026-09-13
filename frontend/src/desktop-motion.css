@@ -1,0 +1,95 @@
+/* Desktop motion: brief travel, soft settling, and faster exits. */
+@media (min-width: 1024px) {
+  :root {
+    --motion-settle: cubic-bezier(0.22, 1, 0.36, 1);
+    --motion-exit: cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  .precedent-card {
+    margin: 16px 0;
+    padding: 24px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--bg-surface);
+  }
+  .precedent-card.selected { border-color: color-mix(in srgb, var(--brand-accent) 45%, var(--border-color)); }
+  .case-fit-panel { border-radius: 0 10px 10px 0; }
+  .search-console-box { box-shadow: 0 4px 20px rgb(0 0 0 / 3%); }
+}
+
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .studio-main-inner { animation: workspace-arrive 480ms var(--motion-settle) backwards; }
+  .results-feed, .thinking-radar-card, .studio-error-banner {
+    animation: content-arrive 360ms var(--motion-settle) backwards;
+  }
+  .precedent-card {
+    animation: content-arrive 420ms var(--motion-settle) backwards;
+    transition: background-color 220ms ease, border-color 220ms ease, box-shadow 260ms ease;
+  }
+  .precedent-card:nth-child(2) { animation-delay: 40ms; }
+  .precedent-card:nth-child(3) { animation-delay: 80ms; }
+  .precedent-card:nth-child(n + 4) { animation-delay: 120ms; }
+  .precedent-card:hover { box-shadow: 0 6px 22px rgb(0 0 0 / 5%); }
+  .studio-sidebar { transition: width 360ms var(--motion-settle), border-width 360ms var(--motion-settle); }
+  .studio-sidebar .sidebar-header, .studio-sidebar .sidebar-scrollable {
+    transition: opacity 180ms ease, translate 280ms var(--motion-settle);
+    opacity: 0;
+    translate: -8px 0;
+  }
+  .studio-sidebar.open .sidebar-header, .studio-sidebar.open .sidebar-scrollable { opacity: 1; translate: 0; }
+  .search-console-box { transition: border-color 200ms ease, box-shadow 240ms ease; }
+  .search-console-box:focus-within { box-shadow: 0 6px 24px rgb(0 0 0 / 6%); }
+  .drafting-floating-dock { animation: content-arrive 320ms var(--motion-settle) backwards; }
+
+  .ementa-reveal {
+    height: var(--collapsible-panel-height);
+    opacity: 1;
+    overflow: hidden;
+    transition: height 300ms var(--motion-settle), opacity 200ms ease;
+  }
+  .ementa-reveal[data-starting-style], .ementa-reveal[data-ending-style] { height: 0; opacity: 0; }
+
+  [data-slot='dialog-overlay'], [data-slot='sheet-overlay'] {
+    animation: none;
+    opacity: 1;
+    transition: opacity 280ms ease;
+  }
+  [data-slot='dialog-overlay'][data-starting-style], [data-slot='dialog-overlay'][data-ending-style],
+  [data-slot='sheet-overlay'][data-starting-style], [data-slot='sheet-overlay'][data-ending-style] { opacity: 0; }
+
+  .semantic-modal-wrapper[data-slot='dialog-content'], .drafting-modal-wrapper[data-slot='dialog-content'] {
+    animation: none;
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+    transition: opacity 260ms ease, scale 360ms var(--motion-settle), translate 360ms var(--motion-settle);
+  }
+  .semantic-modal-wrapper[data-starting-style], .drafting-modal-wrapper[data-starting-style] {
+    opacity: 0;
+    scale: 0.975;
+    translate: 0 16px;
+  }
+  .semantic-modal-wrapper[data-ending-style], .drafting-modal-wrapper[data-ending-style] {
+    opacity: 0;
+    scale: 0.985;
+    translate: 0 8px;
+    transition-duration: 180ms;
+    transition-timing-function: var(--motion-exit);
+  }
+  .pdf-drawer[data-slot='sheet-content'] {
+    opacity: 1;
+    translate: 0 0;
+    transition: translate 380ms var(--motion-settle), opacity 260ms ease;
+  }
+  .pdf-drawer[data-starting-style], .pdf-drawer[data-ending-style] { opacity: 0; translate: 48px 0; }
+  .pdf-drawer[data-ending-style] { transition-duration: 220ms; transition-timing-function: var(--motion-exit); }
+}
+
+@keyframes workspace-arrive {
+  from { opacity: 0; translate: 0 12px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes content-arrive {
+  from { opacity: 0; translate: 0 10px; }
+  to { opacity: 1; translate: 0 0; }
+}

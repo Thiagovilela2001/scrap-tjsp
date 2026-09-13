@@ -12,3 +12,6 @@ build/
 output/
 tmp/
 node_modules/
+vite-app/
+.claude/
+agent/

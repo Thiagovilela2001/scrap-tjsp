@@ -371,7 +371,6 @@ def test_abre_pdf_local_pelo_codigo_do_acordao(tmp_path: Path):
     assert resposta.content.startswith(b"%PDF-")
 
 
-
 def test_pesquisa_assistida_planeja_busca_no_tjsp(tmp_path: Path):
     pesquisa = PesquisaAssistidaFalsa()
     cliente, _ = _cliente(tmp_path, pesquisa_assistida=pesquisa)

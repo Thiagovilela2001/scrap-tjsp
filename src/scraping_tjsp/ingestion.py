@@ -36,6 +36,22 @@ class ServicoColetaTJSP:
         self.max_paginas = max_paginas
         self.max_pdfs = max_pdfs
         self._bloqueio = Lock()
+        self._bloqueio_clientes = Lock()
+        tribunal_padrao = getattr(cliente, "tribunal", "tjsp")
+        self._clientes = {tribunal_padrao: (cliente, self._bloqueio)}
+
+    def _cliente_para_tribunal(self, tribunal: str):
+        # Cada sessão e seu limitador são reutilizados e protegidos por tribunal.
+        # O bloqueio do catálogo não envolve chamadas de rede.
+        with self._bloqueio_clientes:
+            if tribunal not in self._clientes:
+                cliente = TJSPClient(
+                    tribunal=tribunal,
+                    intervalo=self.cliente._limitador.intervalo,
+                    timeout=self.cliente.timeout,
+                )
+                self._clientes[tribunal] = (cliente, Lock())
+            return self._clientes[tribunal]
 
     def pesquisar(
         self,
@@ -47,16 +63,14 @@ class ServicoColetaTJSP:
         consulta.validar()
         if not 1 <= paginas <= self.max_paginas:
             raise ValueError(f"Páginas deve ficar entre 1 e {self.max_paginas}.")
-        with self._bloqueio:
-            trib_alvo = tribunal.lower().strip() if tribunal else getattr(self.cliente, "tribunal", "tjsp")
-            if trib_alvo != getattr(self.cliente, "tribunal", "tjsp"):
-                cliente_trib = TJSPClient(
-                    tribunal=trib_alvo,
-                    intervalo=self.cliente._limitador.intervalo,
-                )
-                resultado = cliente_trib.pesquisar(consulta, max_paginas=paginas)
-            else:
-                resultado = self.cliente.pesquisar(consulta, max_paginas=paginas)
+        trib_alvo = (
+            tribunal.lower().strip()
+            if tribunal
+            else getattr(self.cliente, "tribunal", "tjsp")
+        )
+        cliente, bloqueio = self._cliente_para_tribunal(trib_alvo)
+        with bloqueio:
+            resultado = cliente.pesquisar(consulta, max_paginas=paginas)
         consulta_id = self.repositorio.salvar_pesquisa(consulta, resultado)
         ementas_indexadas = self.repositorio_ementas.indexar_decisoes(
             resultado.decisoes

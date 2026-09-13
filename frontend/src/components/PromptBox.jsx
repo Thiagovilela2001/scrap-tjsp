@@ -1,3 +1,5 @@
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import React, { useEffect, useRef } from 'react';
 import { ArrowRight, CornerDownLeft, SlidersHorizontal, X } from 'lucide-react';
 
@@ -16,6 +18,7 @@ export default function PromptBox({
   onSelectQuickTag,
   onOpenSemanticAssistant,
   selectedCourtCodes,
+  isMobile = false,
 }) {
   const textareaRef = useRef(null);
 
@@ -26,7 +29,7 @@ export default function PromptBox({
   }, [prompt]);
 
   const handleKeyDown = (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !isMobile && !event.nativeEvent.isComposing) {
       event.preventDefault();
       onSubmit();
     }
@@ -48,7 +51,7 @@ export default function PromptBox({
         </div>
         <div className="search-input-wrapper">
           <label className="sr-only" htmlFor="legal-query">Descreva fatos, controvérsia e tese jurídica</label>
-          <textarea
+          <Textarea
             id="legal-query"
             ref={textareaRef}
             className="search-textarea"
@@ -60,34 +63,44 @@ export default function PromptBox({
             disabled={loading}
           />
           {prompt && (
-            <button type="button" className="clear-query-btn" onClick={handleClear} aria-label="Limpar questão jurídica">
+            <Button variant="ghost" size="icon" type="button" className="clear-query-btn" onClick={handleClear} aria-label="Limpar questão jurídica">
               <X size={15} aria-hidden="true" />
-            </button>
+            </Button>
           )}
         </div>
         <div className="search-console-footer">
-          <button type="button" className="semantic-assistant-btn" onClick={onOpenSemanticAssistant}>
+          <Button variant="outline" size="default" type="button" className="semantic-assistant-btn" onClick={onOpenSemanticAssistant}>
             <SlidersHorizontal size={14} aria-hidden="true" /> Delimitar caso
-          </button>
+          </Button>
           <div className="search-submit-wrap">
             <span className="search-shortcut"><CornerDownLeft size={12} aria-hidden="true" /> Enter</span>
-            <button type="button" className="search-submit-btn" onClick={onSubmit} disabled={loading || !prompt.trim() || selectedCourtCodes.size === 0}>
+            <Button variant="default" size="default" type="button" className="search-submit-btn" onClick={onSubmit} disabled={loading || !prompt.trim() || selectedCourtCodes.size === 0}>
               <span>{loading ? 'Pesquisando' : 'Pesquisar'}</span>
               {loading ? <span className="btn-spinner" aria-hidden="true" /> : <ArrowRight size={16} aria-hidden="true" />}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
-      <div className="quick-tags-container" aria-label="Consultas sugeridas">
+      {isMobile ? <details className="mobile-module mobile-suggestions">
+        <summary>Precisa de um ponto de partida?<span aria-hidden="true">+</span></summary>
+        <div className="quick-tags-list">
+          {QUICK_QUERIES.map((query) => (
+            <Button variant="ghost" key={query} type="button" className="quick-tag-pill" disabled={loading}
+              onClick={() => { setPrompt(query); textareaRef.current?.focus(); }}>
+              {query}<ArrowRight size={14} aria-hidden="true" />
+            </Button>
+          ))}
+        </div>
+      </details> : <div className="quick-tags-container" aria-label="Consultas sugeridas">
         <span className="quick-tags-label">Pontos de partida</span>
         <div className="quick-tags-list">
           {QUICK_QUERIES.map((query, index) => (
-            <button key={query} type="button" className="quick-tag-pill" onClick={() => onSelectQuickTag(query)}>
+            <Button variant="ghost" size="default" key={query} type="button" className="quick-tag-pill" onClick={() => onSelectQuickTag(query)}>
               <span>{String(index + 1).padStart(2, '0')}</span>{query}
-            </button>
+            </Button>
           ))}
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

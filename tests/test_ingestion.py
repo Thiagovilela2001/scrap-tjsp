@@ -1,4 +1,8 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier, Lock
+from types import SimpleNamespace
 
 import pytest
 
@@ -124,3 +128,75 @@ def test_importacao_recusa_excesso_e_acordao_de_outra_consulta(tmp_path: Path):
         servico.importar(pesquisa["consulta_id"], ["123", "456"])
     with pytest.raises(ValueError, match="não pertencem"):
         servico.importar(pesquisa["consulta_id"], ["456"])
+
+
+def test_tribunais_diferentes_consultam_em_paralelo(tmp_path, monkeypatch):
+    servico, _ = _servico(tmp_path)
+    barreira = Barrier(3, timeout=3)
+    criados = []
+
+    class ClienteConcorrente(ClienteFalso):
+        def __init__(self, *, tribunal, intervalo, timeout):
+            super().__init__()
+            criados.append((tribunal, intervalo, timeout))
+
+        def pesquisar(self, consulta, *, max_paginas):
+            # Falha se um bloqueio global impedir a entrada dos três clientes.
+            barreira.wait()
+            return super().pesquisar(consulta, max_paginas=max_paginas)
+
+    servico.cliente._limitador = SimpleNamespace(intervalo=2)
+    servico.cliente.timeout = 17
+    monkeypatch.setattr("scraping_tjsp.ingestion.TJSPClient", ClienteConcorrente)
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        resultados = list(
+            executor.map(
+                lambda tribunal: servico.pesquisar(
+                    Consulta(pesquisa="contrato"), tribunal=tribunal
+                ),
+                ["tjpr", "tjrs", "trf1"],
+            )
+        )
+    assert all(resultado["total_disponivel"] == 1 for resultado in resultados)
+    assert sorted(criados) == [("tjpr", 2, 17), ("tjrs", 2, 17), ("trf1", 2, 17)]
+
+
+def test_mesmo_tribunal_reutiliza_cliente_sem_acesso_simultaneo(tmp_path, monkeypatch):
+    servico, _ = _servico(tmp_path)
+    criados = []
+    ativos = 0
+    max_ativos = 0
+    contador = Lock()
+
+    class ClienteMonitorado(ClienteFalso):
+        def __init__(self, **kwargs):
+            super().__init__()
+            criados.append(self)
+
+        def pesquisar(self, consulta, *, max_paginas):
+            nonlocal ativos, max_ativos
+            with contador:
+                ativos += 1
+                max_ativos = max(max_ativos, ativos)
+            try:
+                time.sleep(0.02)
+                return super().pesquisar(consulta, max_paginas=max_paginas)
+            finally:
+                with contador:
+                    ativos -= 1
+
+    servico.cliente._limitador = SimpleNamespace(intervalo=2)
+    servico.cliente.timeout = 17
+    monkeypatch.setattr("scraping_tjsp.ingestion.TJSPClient", ClienteMonitorado)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        resultados = list(
+            executor.map(
+                lambda _: servico.pesquisar(
+                    Consulta(pesquisa="contrato"), tribunal="tjpr"
+                ),
+                range(4),
+            )
+        )
+    assert len(resultados) == 4
+    assert len(criados) == 1
+    assert max_ativos == 1

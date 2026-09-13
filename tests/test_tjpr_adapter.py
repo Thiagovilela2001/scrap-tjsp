@@ -54,12 +54,14 @@ def test_pesquisa_e_parseia_portal_tjpr():
     def requisitar(metodo, url, **kwargs):
         chamadas.append((metodo, url, kwargs))
         if metodo == "GET":
-            return _resposta("https://portal.tjpr.jus.br/jurisprudencia/", HTML_FORMULARIO)
+            return _resposta(
+                "https://portal.tjpr.jus.br/jurisprudencia/", HTML_FORMULARIO
+            )
         return _resposta(url, HTML_RESULTADO)
 
-    resultado = TJPRAdapter(
-        "https://portal.tjpr.jus.br/jurisprudencia/"
-    ).pesquisar(requisitar, Consulta(pesquisa="dano moral"), max_paginas=1)
+    resultado = TJPRAdapter("https://portal.tjpr.jus.br/jurisprudencia/").pesquisar(
+        requisitar, Consulta(pesquisa="dano moral"), max_paginas=1
+    )
 
     assert resultado.total_disponivel == 1
     assert resultado.paginas_coletadas == 1
@@ -88,9 +90,7 @@ def test_extrai_pdf_do_pacote_oficial_tjpr():
             return _resposta(url, detalhe)
         return _resposta(url, memoria.getvalue(), tipo="application/octet")
 
-    resposta = TJPRAdapter(
-        "https://portal.tjpr.jus.br/jurisprudencia/"
-    ).obter_pdf(
+    resposta = TJPRAdapter("https://portal.tjpr.jus.br/jurisprudencia/").obter_pdf(
         requisitar,
         "https://portal.tjpr.jus.br/jurisprudencia/j/123/Acordao-123",
     )

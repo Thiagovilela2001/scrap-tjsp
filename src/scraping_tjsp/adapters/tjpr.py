@@ -146,9 +146,7 @@ class TJPRAdapter:
             "iniciar": "Pesquisar",
         }
 
-    def _parsear_resultados(
-        self, html: str | bytes
-    ) -> tuple[int, list[Decisao]]:
+    def _parsear_resultados(self, html: str | bytes) -> tuple[int, list[Decisao]]:
         soup = BeautifulSoup(html, "html.parser")
         texto = self._texto(soup)
         total_match = re.search(r"([\d.]+)\s+registro\(s\) encontrado", texto)

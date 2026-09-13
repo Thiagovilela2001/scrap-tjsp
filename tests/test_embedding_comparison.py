@@ -37,6 +37,7 @@ def test_cli_grava_comparacao(tmp_path):
     codigo = main([str(base), str(candidato), "--saida", str(saida)])
 
     assert codigo == 0
-    assert json.loads(saida.read_text(encoding="utf-8"))["candidato"][
-        "embedding_model"
-    ] == "bge"
+    assert (
+        json.loads(saida.read_text(encoding="utf-8"))["candidato"]["embedding_model"]
+        == "bge"
+    )

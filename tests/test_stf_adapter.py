@@ -1,4 +1,3 @@
-import pytest
 from scraping_tjsp.adapters.stf import STFAdapter, converter_hit_stf
 from scraping_tjsp.models import Decisao
 
@@ -24,7 +23,10 @@ def test_converter_hit_stf_completo():
     assert decisao.data_julgamento == "03/03/2016"
     assert decisao.data_publicacao == "16/03/2016"
     assert "Repercussão geral" in decisao.ementa
-    assert decisao.inteiro_teor_url == "https://portal.stf.jus.br/jurisprudencia/obterInteiroTeor.asp?idDocumento=10499696"
+    assert (
+        decisao.inteiro_teor_url
+        == "https://portal.stf.jus.br/jurisprudencia/obterInteiroTeor.asp?idDocumento=10499696"
+    )
 
 
 def test_converter_hit_stf_minimo():
