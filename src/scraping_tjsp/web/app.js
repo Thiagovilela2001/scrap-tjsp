@@ -245,7 +245,7 @@ async function consumirSSEAssistida(payload) {
   const resposta = await fetch("/pesquisa-assistida/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tribunal: "todos", ...payload }),
+    body: JSON.stringify({ tribunal: "tjsp", ...payload }),
   });
   if (!resposta.ok) {
     const erroJson = await resposta.json().catch(() => null);

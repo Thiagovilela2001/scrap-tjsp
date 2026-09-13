@@ -40,18 +40,19 @@ class ServicoColetaTJSP:
         tribunal_padrao = getattr(cliente, "tribunal", "tjsp")
         self._clientes = {tribunal_padrao: (cliente, self._bloqueio)}
 
-    def _cliente_para_tribunal(self, tribunal: str):
+    def _cliente_para_tribunal(self, tribunal: str, timeout: float | None = None):
         # Cada sessão e seu limitador são reutilizados e protegidos por tribunal.
         # O bloqueio do catálogo não envolve chamadas de rede.
+        chave = f"{tribunal}:{timeout}" if timeout is not None else tribunal
         with self._bloqueio_clientes:
-            if tribunal not in self._clientes:
+            if chave not in self._clientes:
                 cliente = TJSPClient(
                     tribunal=tribunal,
                     intervalo=self.cliente._limitador.intervalo,
-                    timeout=self.cliente.timeout,
+                    timeout=timeout or self.cliente.timeout,
                 )
-                self._clientes[tribunal] = (cliente, Lock())
-            return self._clientes[tribunal]
+                self._clientes[chave] = (cliente, Lock())
+            return self._clientes[chave]
 
     def pesquisar(
         self,
@@ -59,6 +60,8 @@ class ServicoColetaTJSP:
         *,
         paginas: int = 1,
         tribunal: str | None = None,
+        indexar_vetores: bool = True,
+        timeout: float | None = None,
     ) -> dict:
         consulta.validar()
         if not 1 <= paginas <= self.max_paginas:
@@ -68,13 +71,15 @@ class ServicoColetaTJSP:
             if tribunal
             else getattr(self.cliente, "tribunal", "tjsp")
         )
-        cliente, bloqueio = self._cliente_para_tribunal(trib_alvo)
+        cliente, bloqueio = self._cliente_para_tribunal(trib_alvo, timeout=timeout)
         with bloqueio:
             resultado = cliente.pesquisar(consulta, max_paginas=paginas)
         consulta_id = self.repositorio.salvar_pesquisa(consulta, resultado)
-        ementas_indexadas = self.repositorio_ementas.indexar_decisoes(
-            resultado.decisoes
-        )
+        ementas_indexadas = 0
+        if indexar_vetores:
+            ementas_indexadas = self.repositorio_ementas.indexar_decisoes(
+                resultado.decisoes
+            )
         return {
             "consulta_id": consulta_id,
             "total_disponivel": resultado.total_disponivel,

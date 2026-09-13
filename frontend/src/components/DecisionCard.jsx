@@ -5,7 +5,15 @@ import { Button } from "@/components/ui/button";
 import React, { useState } from 'react';
 import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Copy, FileText, Quote } from 'lucide-react';
 
-export default function DecisionCard({ decisao, onOpenPdf, isSelected, onToggleSelect, index = 0 }) {
+export default function DecisionCard({
+  decisao,
+  onOpenPdf,
+  isSelected,
+  onToggleSelect,
+  index = 0,
+  isActive = false,
+  onInspect,
+}) {
   const [expanded, setExpanded] = useState(false);
   const [copiedNum, setCopiedNum] = useState(false);
   const [copiedCitation, setCopiedCitation] = useState(false);
@@ -36,8 +44,32 @@ export default function DecisionCard({ decisao, onOpenPdf, isSelected, onToggleS
     }
   };
 
+  const handleCardClick = (e) => {
+    // If the click is on an interactive element, do not trigger inspect
+    if (e.target.closest('button, a, input, [role="checkbox"]')) {
+      return;
+    }
+    if (onInspect) {
+      onInspect(decisao);
+    }
+  };
+
+  const handleCardKeyDown = (event) => {
+    if (!onInspect || event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onInspect(decisao);
+    }
+  };
+
   return (
-    <article className={`precedent-card ${isSelected ? 'selected' : ''}`}>
+    <article
+      className={`precedent-card ${isSelected ? 'selected' : ''} ${isActive ? 'active-inspected' : ''}`}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      tabIndex={onInspect ? 0 : undefined}
+      aria-label={onInspect ? `Analisar precedente ${numProcesso}` : undefined}
+    >
       <div className="precedent-index" aria-hidden="true">
         <span>{String(index + 1).padStart(2, '0')}</span>
         <span className="precedent-index-line" />
@@ -59,9 +91,11 @@ export default function DecisionCard({ decisao, onOpenPdf, isSelected, onToggleS
             </div>
           </div>
           {relevancia != null && (
-            <div className="relevance-score" aria-label={`${relevancia}% de aderência`}>
-              <span className="relevance-number">{relevancia}</span><span className="relevance-percent">%</span>
-              <span className="relevance-label">aderência</span>
+            <div className={`relevance-score ${relevancia >= 85 ? 'high-score' : 'mid-score'}`} aria-label={`${relevancia}% de aderência`}>
+              <div className="relevance-labels">
+                <span className="relevance-label">Aderência</span>
+                <span className="relevance-number">{relevancia}%</span>
+              </div>
             </div>
           )}
         </header>

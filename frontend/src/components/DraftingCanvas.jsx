@@ -8,13 +8,11 @@ import {
   X,
   Copy,
   Check,
-  Sparkles,
   Send,
-  FileText,
   Download,
   FileDown,
   RefreshCw,
-  AlignLeft
+  AlignLeft,
 } from 'lucide-react';
 import { exportDraftToDocx } from '../utils/docxExport';
 import { cleanLegalText } from '../utils/cleanLegalText';
@@ -114,17 +112,17 @@ export default function DraftingCanvas({
     }
   };
 
-  const wordCount = draft ? draft.trim().split(/\s+/).length : 0;
+  const wordCount = draft ? draft.trim().split(/\s+/).filter(Boolean).length : 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="drafting-modal-wrapper" showCloseButton={false} initialFocus={closeButtonRef}>
-        {/* Studio Top Header */}
+        {/* Top Header */}
         <div className="drafting-header">
           <div className="drafting-main-title">
             <DialogTitle>Mesa de Redação</DialogTitle>
             <DialogDescription className="precedents-count-badge">
-              {selectedDecisions?.length || 0} precedentes selecionados
+              {selectedDecisions?.length || 0} precedente{selectedDecisions?.length === 1 ? '' : 's'} no caderno
             </DialogDescription>
           </div>
 
@@ -133,7 +131,9 @@ export default function DraftingCanvas({
               {wordCount} palavras
             </div>
 
-            <Button variant="outline" size="default"
+            <Button
+              variant="outline"
+              size="default"
               type="button"
               className="draft-action-btn"
               onClick={() => setDraft(cleanLegalText(draft))}
@@ -143,7 +143,9 @@ export default function DraftingCanvas({
               <span>Formatar</span>
             </Button>
 
-            <Button variant="outline" size="default"
+            <Button
+              variant="outline"
+              size="default"
               type="button"
               className="draft-action-btn docx-btn"
               onClick={handleExportDocx}
@@ -151,10 +153,12 @@ export default function DraftingCanvas({
               title="Exportar Petição Formatada em Word (.docx)"
             >
               <FileDown size={14} />
-              <span>{exportingDocx ? 'Gerando Word...' : 'Exportar .docx'}</span>
+              <span>{exportingDocx ? 'Gerando...' : 'Word (.docx)'}</span>
             </Button>
 
-            <Button variant="outline" size="default"
+            <Button
+              variant="outline"
+              size="default"
               type="button"
               className="draft-action-btn"
               onClick={handleDownloadTxt}
@@ -164,17 +168,21 @@ export default function DraftingCanvas({
               <span>.txt</span>
             </Button>
 
-            <Button variant="outline" size="default"
+            <Button
+              variant="outline"
+              size="default"
               type="button"
               className={`draft-action-btn primary ${copied ? 'copied' : ''}`}
               onClick={handleCopy}
               title="Copiar texto completo para a área de transferência"
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
-              <span>{copied ? 'Copiado!' : 'Copiar Petição'}</span>
+              <span>{copied ? 'Copiado!' : 'Copiar'}</span>
             </Button>
 
-            <Button variant="ghost" size="icon"
+            <Button
+              variant="ghost"
+              size="icon"
               type="button"
               className="drafting-close-btn"
               onClick={onClose}
@@ -187,7 +195,7 @@ export default function DraftingCanvas({
           </div>
         </div>
 
-        {/* Studio Editor Area */}
+        {/* Editor Area */}
         <div className="drafting-editor-container">
           <Textarea
             aria-label="Texto da minuta"
@@ -199,15 +207,15 @@ export default function DraftingCanvas({
           />
         </div>
 
-        {/* AI Co-Pilot Refinement Toolbar */}
+        {/* Refinement toolbar */}
         <div className="drafting-footer">
           <div className="quick-refinements-row">
-            <span className="quick-refine-label">
-              <Sparkles size={12} /> Ajustar com IA:
-            </span>
+            <span className="quick-refine-label">Ajustes rápidos</span>
             <div className="quick-refine-chips">
               {QUICK_PROMPTS.map((promptText, idx) => (
-                <Button variant="ghost" size="default"
+                <Button
+                  variant="ghost"
+                  size="default"
                   key={idx}
                   type="button"
                   className="quick-refine-pill"
@@ -237,7 +245,9 @@ export default function DraftingCanvas({
               disabled={refining}
             />
 
-            <Button variant="default" size="default"
+            <Button
+              variant="default"
+              size="default"
               type="submit"
               className="draft-refine-send-btn"
               disabled={refining || !chatInput.trim()}

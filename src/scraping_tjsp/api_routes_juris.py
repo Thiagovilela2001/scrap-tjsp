@@ -81,9 +81,7 @@ def criar_router_juris(
     def buscar_jurisprudencia(requisicao: RequisicaoBusca) -> dict:
         pergunta = requisicao.pergunta.strip()
         if not pergunta:
-            raise HTTPException(
-                status_code=422, detail="Pergunta não pode ser vazia."
-            )
+            raise HTTPException(status_code=422, detail="Pergunta não pode ser vazia.")
         try:
             resultados = busca_hibrida.buscar(
                 pergunta,
@@ -114,9 +112,7 @@ def criar_router_juris(
             pesquisar_sinonimos=requisicao.sinonimos,
         )
         try:
-            return servico_coleta.pesquisar(
-                consulta, paginas=requisicao.paginas
-            )
+            return servico_coleta.pesquisar(consulta, paginas=requisicao.paginas)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RequestException as exc:
@@ -153,4 +149,3 @@ def criar_router_juris(
         ]
 
     return router
-

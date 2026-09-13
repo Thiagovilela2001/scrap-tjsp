@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 from .models import DocumentoBaixado, ResultadoProcessamento
 
@@ -78,9 +77,7 @@ class DocumentosStorageMixin:
                 ),
             )
 
-    def registrar_erro_download(
-        self, cd_acordao: str, url: str, erro: str
-    ) -> None:
+    def registrar_erro_download(self, cd_acordao: str, url: str, erro: str) -> None:
         with self._conectar() as conexao:
             decisao_id = self._id_decisao(conexao, cd_acordao)
             conexao.execute(
@@ -116,9 +113,7 @@ class DocumentosStorageMixin:
                 (documento_id,),
             )
 
-    def registrar_processamento(
-        self, resultado: ResultadoProcessamento
-    ) -> None:
+    def registrar_processamento(self, resultado: ResultadoProcessamento) -> None:
         with self._conectar() as conexao:
             documento_id = self._id_documento(conexao, resultado.cd_acordao)
             conexao.execute(
@@ -235,9 +230,7 @@ class DocumentosStorageMixin:
             (cd_acordao,),
         ).fetchone()
         if resultado is None:
-            raise LookupError(
-                f"PDF baixado do acórdão {cd_acordao} não encontrado."
-            )
+            raise LookupError(f"PDF baixado do acórdão {cd_acordao} não encontrado.")
         return int(resultado[0])
 
     @staticmethod
@@ -249,4 +242,3 @@ class DocumentosStorageMixin:
         if resultado is None:
             raise LookupError("Processamento de documento não encontrado.")
         return int(resultado[0])
-

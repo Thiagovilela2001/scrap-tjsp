@@ -41,4 +41,3 @@ def test_sqlite_connection_pool_concurrent_access(tmp_path: Path):
         assert count == 20
 
     pool.fechar()
-

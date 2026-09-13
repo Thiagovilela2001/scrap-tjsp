@@ -41,7 +41,7 @@ function setup(ui) {
 describe('Shadcn integration', () => {
   it.each([
     ['PDF', PdfDrawer, { pdfData: { url: 'about:blank', title: 'Acórdão de teste' } }, 'Acórdão de teste', 'Fechar visualizador'],
-    ['semantic form', SemanticClarificationModal, { onApplyAndSearch() {} }, 'Desambiguação e Refinamento Semântico', 'Fechar formulário semântico'],
+    ['semantic form', SemanticClarificationModal, { onApplyAndSearch() {} }, 'Delimitar pesquisa', 'Fechar formulário semântico'],
     ['draft editor', DraftingCanvas, { draft: 'Minuta de teste', setDraft() {}, selectedDecisions: [] }, 'Mesa de Redação', 'Fechar editor de minuta'],
   ])('%s traps focus, closes on Escape and returns focus', async (_, Component, props, name, closeName) => {
     function Harness() {
@@ -86,6 +86,16 @@ describe('Shadcn integration', () => {
     expect(screen.getByRole('checkbox', { name: /TJSP/ }).getAttribute('aria-checked')).toBe('true');
   });
 
+  it('does not select unavailable courts through presets', async () => {
+    function Harness() {
+      const [selected, setSelected] = useState(new Set(['tjsp']));
+      return <CourtSelector activeCodes={new Set(['tjsp'])} selectedCodes={selected} onChange={setSelected} />;
+    }
+    const user = setup(<Harness />);
+    await user.click(screen.getByRole('button', { name: /Superiores \(STF\/STJ\/TST\)/ }));
+    expect(screen.getByText('0 tribunais selecionados')).toBeTruthy();
+  });
+
   it('keeps icon actions working and reports clipboard success and failure', async () => {
     const user = setup(<DecisionCard decisao={{ processo: '123', cd_acordao: '1' }} />);
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Clipboard unavailable'));
@@ -95,5 +105,14 @@ describe('Shadcn integration', () => {
     vi.mocked(navigator.clipboard.writeText).mockResolvedValue();
     await user.click(copy);
     expect(toast.success).toHaveBeenCalledWith('Texto copiado.');
+  });
+
+  it('opens a precedent from the keyboard', async () => {
+    const onInspect = vi.fn();
+    const user = setup(<DecisionCard decisao={{ processo: '123', cd_acordao: '1' }} onInspect={onInspect} />);
+    const precedent = screen.getByRole('article', { name: 'Analisar precedente 123' });
+    precedent.focus();
+    await user.keyboard('{Enter}');
+    expect(onInspect).toHaveBeenCalledWith(expect.objectContaining({ processo: '123' }));
   });
 });

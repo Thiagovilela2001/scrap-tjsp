@@ -8,6 +8,7 @@ from .rag import FonteContexto, PacoteContextoIA
 
 if TYPE_CHECKING:
     from .assisted_research import ConfiguracaoPesquisaAssistida
+    from .cost import PrecosTokens
 
 
 def pacote_planejamento(
@@ -21,6 +22,30 @@ def pacote_planejamento(
         instrucoes_sistema=instrucoes_planejamento(tribunal),
         mensagem_usuario=mensagem,
         fontes=(),
+    )
+
+
+def estimar_maximo_pesquisa(
+    pacote_plano: PacoteContextoIA,
+    config: ConfiguracaoPesquisaAssistida,
+    precos: PrecosTokens,
+) -> float:
+    from .cost import estimar_custo_maximo
+
+    pacote_maximo = PacoteContextoIA(
+        pergunta="estimativa",
+        instrucoes_sistema=instrucoes_analise(),
+        mensagem_usuario="x" * (config.max_candidatos * config.caracteres_ementa),
+        fontes=(),
+    )
+    return estimar_custo_maximo(
+        [pacote_plano],
+        max_output_tokens=config.tokens_planejamento,
+        precos=precos,
+    ) + estimar_custo_maximo(
+        [pacote_maximo],
+        max_output_tokens=config.tokens_analise,
+        precos=precos,
     )
 
 
@@ -167,11 +192,35 @@ def decisao_de_dict(dados: dict) -> Decisao:
     return Decisao(**valores)
 
 
+PRIORIDADE_TRIBUNAIS: tuple[str, ...] = (
+    "tjsp",
+    "stj",
+    "stf",
+    "tst",
+    "tjrj",
+    "tjmg",
+    "tjrs",
+    "tjpr",
+    "tjsc",
+    "tjba",
+    "tjdft",
+    "trf3",
+    "trf4",
+    "trf1",
+    "trf2",
+    "trf5",
+    "trf6",
+)
+
+
 def buscar_candidatos_tribunais(
     servico_coleta,
     consultas: list[dict],
     tribunal: str = "todos",
     max_candidatos: int = 20,
+    callback_progresso=None,
+    timeout_tribunal: float = 7.0,
+    max_candidatos_coleta: int = 40,
 ) -> tuple[list[Decisao], list[dict], dict[str, str]]:
     import concurrent.futures
 
@@ -192,25 +241,39 @@ def buscar_candidatos_tribunais(
     else:
         tribs_alvo = [tribunal.lower().strip()]
 
+    ordem = {t: i for i, t in enumerate(PRIORIDADE_TRIBUNAIS)}
+    tribs_alvo.sort(key=lambda t: ordem.get(t, 100))
+
+    import inspect
+
+    sig = inspect.signature(servico_coleta.pesquisar)
+    aceita_var = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    extra_params = {}
+    if "indexar_vetores" in sig.parameters or aceita_var:
+        extra_params["indexar_vetores"] = False
+    if "timeout" in sig.parameters or aceita_var:
+        extra_params["timeout"] = timeout_tribunal
+
     def coletar_tribunal_consulta(item_consulta: dict, trib: str):
         try:
             resultado = servico_coleta.pesquisar(
                 Consulta(pesquisa=item_consulta["pesquisa"]),
                 paginas=1,
                 tribunal=trib,
+                **extra_params,
             )
             decisoes = [
-                decisao_de_dict(dados)
-                for dados in resultado.get("decisoes", [])
+                decisao_de_dict(dados) for dados in resultado.get("decisoes", [])
             ]
             return item_consulta, trib, resultado, decisoes
         except Exception:
             return item_consulta, trib, {}, []
 
     max_workers = min(32, max(1, len(consultas) * len(tribs_alvo)))
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=max_workers
-    ) as executor:
+    total_coletados = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futuros = [
             executor.submit(coletar_tribunal_consulta, item, trib)
             for item in consultas
@@ -221,6 +284,7 @@ def buscar_candidatos_tribunais(
             if decisoes:
                 sigla = trib.upper()
                 lotes.append([(d, sigla) for d in decisoes])
+                total_coletados += len(decisoes)
                 executadas.append(
                     {
                         **item_consulta,
@@ -232,6 +296,17 @@ def buscar_candidatos_tribunais(
                         "coletados": len(decisoes),
                     }
                 )
+                if callback_progresso:
+                    pct = min(70, 20 + len(executadas) * 3)
+                    callback_progresso(
+                        "coleta",
+                        pct,
+                        f"Coletados {len(decisoes)} acórdãos ({sigla})...",
+                    )
+            if total_coletados >= max_candidatos_coleta and len(tribs_alvo) > 1:
+                for pendente in futuros:
+                    pendente.cancel()
+                break
 
     candidatos: list[Decisao] = []
     tribunal_por_acordao: dict[str, str] = {}
@@ -253,4 +328,3 @@ def buscar_candidatos_tribunais(
                 break
 
     return candidatos, executadas, tribunal_por_acordao
-

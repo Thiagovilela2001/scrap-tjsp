@@ -105,7 +105,7 @@ export default function SemanticClarificationModal({
               <SlidersHorizontal size={17} />
             </div>
             <div>
-              <DialogTitle className="semantic-modal-title">Desambiguação e Refinamento Semântico</DialogTitle>
+              <DialogTitle className="semantic-modal-title">Delimitar pesquisa</DialogTitle>
               <DialogDescription className="semantic-modal-desc">
                 {hasAiQuestions
                   ? 'Especifique os contornos fáticos e teses para focar os precedentes mais aderentes:'
@@ -150,7 +150,7 @@ export default function SemanticClarificationModal({
         <div className="semantic-modal-body">
           {aiTheme && (
             <div className="semantic-branch-theme">
-              <span className="theme-label">Tema Principal Detectado</span>
+              <span className="theme-label">Tema identificado</span>
               <strong className="theme-title">{aiTheme}</strong>
             </div>
           )}

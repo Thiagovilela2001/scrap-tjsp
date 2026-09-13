@@ -183,10 +183,7 @@ def criar_router_ia(
         tags=["inteligencia-artificial", "documentos"],
     )
     def analisar_documentos_stream(requisicao: RequisicaoAnaliseDocumental):
-        limite = (
-            requisicao.max_custo_brl
-            or config.max_custo_analise_documental_brl
-        )
+        limite = requisicao.max_custo_brl or config.max_custo_analise_documental_brl
         if limite > config.max_custo_analise_documental_brl:
             raise HTTPException(
                 status_code=422,
@@ -222,7 +219,6 @@ def criar_router_ia(
                 "X-Accel-Buffering": "no",
             },
         )
-
 
     @router.post("/tjsp/gerar-minuta", tags=["tjsp"])
     def gerar_minuta(requisicao: RequisicaoMinuta) -> dict:

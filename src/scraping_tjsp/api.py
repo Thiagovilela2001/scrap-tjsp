@@ -57,6 +57,7 @@ class ProvedorConfigurado(ProvedorIA, Protocol):
 
 ProvedorFactory = Callable[[str | None, int], ProvedorConfigurado]
 WEB_DIR = Path(__file__).with_name("web")
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 
 def _criar_provedor_maritaca(
@@ -138,6 +139,13 @@ def criar_app(
 
     @app.get("/", include_in_schema=False)
     def inicio() -> FileResponse:
+        return FileResponse(WEB_DIR / "index.html")
+
+    @app.get("/app", include_in_schema=False)
+    def app_react() -> FileResponse:
+        index_react = FRONTEND_DIST / "index.html"
+        if index_react.is_file():
+            return FileResponse(index_react)
         return FileResponse(WEB_DIR / "index.html")
 
     @app.get("/saude", tags=["sistema"])

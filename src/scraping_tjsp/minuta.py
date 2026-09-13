@@ -92,7 +92,7 @@ def gerar_minuta_juridica(
             linhas.append(f"**Tese Aplicável:** {arg}")
         if ementa:
             linhas.append("")
-            linhas.append(f"> *\"{ementa}\"*")
+            linhas.append(f'> *"{ementa}"*')
             linhas.append("")
 
     linhas.extend(
@@ -113,4 +113,3 @@ def gerar_minuta_juridica(
         "tema": tema,
         "acordaos_utilizados": len(acordaos),
     }
-

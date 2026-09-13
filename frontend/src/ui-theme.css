@@ -1,0 +1,200 @@
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: 10px;
+  --radius-md: 10px;
+  --radius-lg: 10px;
+  --radius-xl: 10px;
+  --radius-2xl: 10px;
+  --radius-3xl: 10px;
+  --radius-4xl: 10px;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: var(--danger);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--text-primary);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+/* Share the app palette with shadcn in both themes. */
+:root, [data-theme='dark'] {
+  --background: var(--bg-app);
+  --foreground: var(--text-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--bg-surface);
+  --primary-foreground: var(--text-primary);
+  --secondary: var(--bg-subtle);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-subtle);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--bg-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--danger);
+  --border: var(--border-color);
+  --input: var(--border-color);
+  --ring: var(--focus);
+}
+
+/* Shared controls retain the existing responsive layout and content wrapping. */
+[data-slot='button'] {
+  height: auto;
+  min-height: 32px;
+  border-radius: var(--radius-sm);
+  white-space: normal;
+}
+[data-slot='button'][data-size='icon'] {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+[data-slot='button'][data-variant='default'] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--border-color);
+}
+[data-slot='button'][data-variant='default']:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+[data-slot='input'] {
+  border-radius: var(--radius-sm);
+}
+.search-console-box {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.search-textarea { field-sizing: fixed; }
+
+/* Portaled overlays sit above the research dock and sidebar. */
+[data-slot='dialog-overlay'], [data-slot='sheet-overlay'] {
+  z-index: 100;
+  background: #00000080;
+}
+[data-slot='dialog-content'], [data-slot='sheet-content'] { z-index: 110; }
+.drafting-modal-wrapper[data-slot='dialog-content'] {
+  width: auto;
+  max-width: none;
+  padding: 0;
+  gap: 0;
+  translate: none;
+  overflow: hidden;
+}
+.semantic-modal-wrapper[data-slot='dialog-content'] {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  padding: 0;
+  gap: 0;
+  translate: none;
+  overflow: hidden;
+}
+.semantic-modal-header, .semantic-branch-tabs, .semantic-modal-footer { flex-shrink: 0; }
+.semantic-modal-body { min-height: 0; }
+.pdf-drawer[data-slot='sheet-content'] { max-width: none; gap: 0; }
+[data-slot='tooltip-content'] { max-width: min(20rem, calc(100vw - 24px)); }
+[data-slot='tooltip-positioner'] { z-index: 150; }
+.court-tabs[data-slot='tabs-list'] { width: 100%; height: auto; justify-content: flex-start; }
+.court-tab[data-slot='tabs-trigger'] { min-width: 0; white-space: normal; }
+.court-panel[data-slot='tabs-content'] { min-width: 0; }
+.court-option [data-slot='checkbox'], .custom-checkbox-wrapper [data-slot='checkbox'] { flex-shrink: 0; }
+.search-skeleton { grid-column: 2; display: grid; gap: 8px; padding-top: 8px; }
+[data-slot='skeleton'] { background: var(--border-color); }
+.drafting-header-actions { flex-wrap: wrap; }
+@media (max-width: 767px) {
+  .drafting-modal-wrapper[data-slot='dialog-content'],
+  .semantic-modal-wrapper[data-slot='dialog-content'] { border-radius: 0; }
+  .drafting-header { flex-wrap: wrap; gap: 8px; }
+  .drafting-header-actions { gap: 6px; }
+}
+
+/* Flat controls and portaled surfaces share the same visual system. */
+[data-slot='button'], [data-slot='input'], [data-slot='textarea'],
+[data-slot='dialog-content'], [data-slot='sheet-content'],
+[data-slot='tabs-trigger'] { box-shadow: none; }
+[data-slot='button'], [data-slot='input'], [data-slot='textarea'],
+[data-slot='dialog-content'], [data-slot='sheet-content'] { border-radius: var(--radius-sm); }
+[data-slot='button']:focus-visible, [data-slot='input']:focus-visible,
+[data-slot='textarea']:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+[data-slot='tooltip-content'] { background: #000; color: #fff; box-shadow: none; }
+[data-sonner-toaster] {
+  --normal-bg: var(--bg-elevated); --normal-text: var(--text-primary); --normal-border: var(--border-color);
+  --success-bg: var(--bg-elevated); --success-text: var(--text-primary); --success-border: var(--border-color);
+  --info-bg: var(--bg-elevated); --info-text: var(--text-primary); --info-border: var(--border-color);
+  --warning-bg: var(--bg-elevated); --warning-text: var(--text-primary); --warning-border: var(--border-color);
+  --error-bg: var(--bg-elevated); --error-text: var(--text-primary); --error-border: var(--border-color);
+}
+[data-sonner-toast] { box-shadow: none; font-family: var(--font-sans); }

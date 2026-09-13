@@ -97,4 +97,3 @@ class SQLiteConnectionPool:
                 except queue.Empty:
                     break
             self._total_criadas = 0
-

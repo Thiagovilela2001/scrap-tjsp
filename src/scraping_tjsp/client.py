@@ -256,11 +256,12 @@ class TJSPClient:
 
     def _requisicao_url(self, metodo: str, url: str, **kwargs) -> requests.Response:
         self._limitador.aguardar()
+        timeout = kwargs.pop("timeout", self.timeout)
         try:
             resposta = self.session.request(
                 metodo,
                 url,
-                timeout=self.timeout,
+                timeout=timeout,
                 **kwargs,
             )
             resposta.raise_for_status()

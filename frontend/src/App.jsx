@@ -11,6 +11,7 @@ import useMobileLayout from './hooks/useMobileLayout';
 import Sidebar from './components/Sidebar';
 import PromptBox from './components/PromptBox';
 import DecisionCard from './components/DecisionCard';
+import PrecedentInspector from './components/PrecedentInspector';
 import PdfDrawer from './components/PdfDrawer';
 import DraftingCanvas from './components/DraftingCanvas';
 import SemanticClarificationModal from './components/SemanticClarificationModal';
@@ -36,8 +37,11 @@ export default function App() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [thinkingStep, setThinkingStep] = useState('');
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [collectedBadges, setCollectedBadges] = useState([]);
   const [history, setHistory] = useState([]);
   const [results, setResults] = useState(null);
+  const [activeDecision, setActiveDecision] = useState(null);
   const [error, setError] = useState(null);
   const [filterChamber, setFilterChamber] = useState('all');
   const [pdfData, setPdfData] = useState(null);
@@ -61,13 +65,9 @@ export default function App() {
 
   useEffect(() => {
     const savedTheme = localStorage.getItem(CHAVE_TEMA);
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.setAttribute('data-theme', savedTheme);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark');
-      document.documentElement.setAttribute('data-theme', 'dark');
-    }
+    const initialTheme = savedTheme || 'light';
+    setTheme(initialTheme);
+    document.documentElement.setAttribute('data-theme', initialTheme);
 
     try {
       const savedHistory = JSON.parse(localStorage.getItem(CHAVE_HISTORICO) || '[]');
@@ -149,6 +149,8 @@ export default function App() {
     else setMobileView('results');
     setIsSemanticModalOpen(false);
     setThinkingStep('Consultando jurisprudência nos tribunais brasileiros...');
+    setProgressPercent(15);
+    setCollectedBadges([]);
     saveToHistory(queryToSearch.trim());
     setSelectedIds(new Set());
 
@@ -204,6 +206,18 @@ export default function App() {
 
         if (event.tipo === 'progresso') {
           setThinkingStep(event.mensagem);
+          if (typeof event.progresso === 'number') {
+            setProgressPercent(event.progresso);
+          }
+          const matchColeta = event.mensagem.match(/Coletados (\d+) acórdãos \(([^)]+)\)/);
+          if (matchColeta) {
+            const qtd = matchColeta[1];
+            const sigla = matchColeta[2];
+            setCollectedBadges((prev) => {
+              if (prev.some((b) => b.sigla === sigla)) return prev;
+              return [...prev, { sigla, qtd }];
+            });
+          }
         } else if (event.tipo === 'resultado') {
           finalData = event.dados;
         } else if (event.tipo === 'erro') {
@@ -246,6 +260,7 @@ export default function App() {
           const procs = finalData.processos || [];
           const top3 = procs.slice(0, 3).map((p) => String(p.cd_acordao));
           setSelectedIds(new Set(top3));
+          setActiveDecision(procs[0] || null);
         }
       } else {
         throw new Error('Servidor concluiu sem dados de resultado. Verifique os termos e tente novamente.');
@@ -318,6 +333,13 @@ export default function App() {
     return matchOrgao || matchTribunal;
   });
 
+  const inspectedDecision = filteredDecisions.find((decision) =>
+    activeDecision && (
+      String(activeDecision.cd_acordao) === String(decision.cd_acordao) ||
+      activeDecision.processo === decision.processo
+    )
+  ) || filteredDecisions[0] || null;
+
   return (
     <div className={`studio-app ${isMobile ? 'mobile-workspace' : ''}`} data-mobile-view={mobileView}>
       <Toaster theme={theme} position="top-right" closeButton richColors />
@@ -371,13 +393,12 @@ export default function App() {
             </header>}
             {!isMobile && !results && (
               <section className="workbench-hero">
-                <div className="hero-index" aria-hidden="true">01 / PESQUISA</div>
-                <h2 className="workbench-title">Encontre o precedente que sustenta o argumento.</h2>
+                <div className="hero-index" aria-hidden="true">Pesquisa jurisprudencial</div>
+                <h2 className="workbench-title">Pesquisa de precedentes</h2>
                 <p className="workbench-desc">
-                  Descreva fatos e controvérsia. O sistema confronta acórdãos oficiais,
-                  aponta aderência e organiza fundamentos prontos para revisão jurídica.
+                  Descreva a controvérsia, os fatos relevantes e a tese jurídica para consultar decisões oficiais.
                 </p>
-                <div className="hero-rule"><span>Acervo oficial</span><span>Análise rastreável</span><span>Minuta editável</span></div>
+                <div className="hero-rule"><span>Fontes oficiais</span><span>Filtros por tribunal</span><span>Análise documental</span></div>
               </section>
             )}
 
@@ -405,16 +426,52 @@ export default function App() {
 
             {loading && (!isMobile || mobileView === 'results') && (
               <div className="thinking-radar-card" role="status" aria-live="polite">
-                <span className="thinking-index">02</span>
-                <div className="thinking-radar-info">
-                  <strong className="thinking-stage-title">{thinkingStep || 'Consultando acórdãos oficiais'}</strong>
-                  <span className="thinking-stage-detail">Triagem semântica e leitura comparada em andamento.</span>
+                <div className="thinking-stepper-header">
+                  <div className="thinking-radar-pulse-ring">
+                    <span className="radar-pulse-dot" />
+                  </div>
+                  <div className="thinking-stage-meta">
+                    <span className="thinking-subkicker">Pesquisa em andamento</span>
+                    <strong className="thinking-stage-title">
+                      {thinkingStep || 'Consultando decisões nas fontes selecionadas'}
+                    </strong>
+                  </div>
+                  {progressPercent > 0 && (
+                    <span className="thinking-percent-tag">{progressPercent}%</span>
+                  )}
                 </div>
-                <div className="search-skeleton" aria-hidden="true">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-5/6" />
+
+                <div className="thinking-progress-track">
+                  <div
+                    className="thinking-progress-bar"
+                    style={{ width: `${progressPercent || 15}%` }}
+                  />
                 </div>
+
+                <div className="thinking-steps-flow">
+                  <div className={`flow-step ${progressPercent >= 20 ? 'done' : 'active'}`}>
+                    <span className="step-dot" />
+                    <span className="step-text">1. Consulta</span>
+                  </div>
+                  <div className={`flow-step ${progressPercent >= 60 ? 'done' : progressPercent >= 20 ? 'active' : 'pending'}`}>
+                    <span className="step-dot" />
+                    <span className="step-text">2. Recuperação</span>
+                  </div>
+                  <div className={`flow-step ${progressPercent >= 90 ? 'done' : progressPercent >= 60 ? 'active' : 'pending'}`}>
+                    <span className="step-dot" />
+                    <span className="step-text">3. Classificação</span>
+                  </div>
+                </div>
+
+                {collectedBadges.length > 0 && (
+                  <div className="thinking-badges-row">
+                    {collectedBadges.map((b) => (
+                      <span key={b.sigla} className="thinking-badge-chip">
+                        ✓ {b.sigla} ({b.qtd})
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -457,18 +514,51 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="precedents-list">
-                  {filteredDecisions.length === 0 && <p className="mobile-empty-state">{(results.processos || []).length ? 'Nenhum precedente neste filtro. Escolha outro no Arquivo.' : 'Nenhum precedente encontrado. Ajuste os termos ou os tribunais da pesquisa.'}</p>}
-                  {filteredDecisions.map((decisao, idx) => (
-                    <DecisionCard
-                      key={decisao.cd_acordao || decisao.processo || idx}
-                      index={idx}
-                      decisao={decisao}
-                      isSelected={selectedIds.has(String(decisao.cd_acordao))}
-                      onToggleSelect={() => toggleSelect(decisao.cd_acordao)}
-                      onOpenPdf={(url, title, subtitle) => setPdfData({ url, title, subtitle })}
-                    />
-                  ))}
+                <div className="results-split-layout">
+                  <div className="precedents-list-pane">
+                    <div className="precedents-list">
+                      {filteredDecisions.length === 0 && (
+                        <p className="mobile-empty-state">
+                          {(results.processos || []).length
+                            ? 'Nenhum precedente neste filtro. Escolha outro no Arquivo.'
+                            : 'Nenhum precedente encontrado. Ajuste os termos ou os tribunais da pesquisa.'}
+                        </p>
+                      )}
+                      {filteredDecisions.map((decisao, idx) => (
+                        <DecisionCard
+                          key={decisao.cd_acordao || decisao.processo || idx}
+                          index={idx}
+                          decisao={decisao}
+                          isSelected={selectedIds.has(String(decisao.cd_acordao))}
+                          isActive={
+                            inspectedDecision &&
+                            (String(inspectedDecision.cd_acordao) === String(decisao.cd_acordao) ||
+                              inspectedDecision.processo === decisao.processo)
+                          }
+                          onInspect={(d) => setActiveDecision(d)}
+                          onToggleSelect={() => toggleSelect(decisao.cd_acordao)}
+                          onOpenPdf={(url, title, subtitle) => setPdfData({ url, title, subtitle })}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {!isMobile && (
+                    <div className="precedents-inspector-pane">
+                      <PrecedentInspector
+                        decisao={inspectedDecision}
+                        isSelected={
+                          inspectedDecision && selectedIds.has(String(inspectedDecision.cd_acordao))
+                        }
+                        onToggleSelect={() =>
+                          inspectedDecision && toggleSelect(inspectedDecision.cd_acordao)
+                        }
+                        onOpenPdf={(url, title, subtitle) =>
+                          setPdfData({ url, title, subtitle })
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               </section>
             )}

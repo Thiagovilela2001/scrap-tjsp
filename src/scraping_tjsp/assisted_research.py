@@ -1,18 +1,15 @@
-from __future__ import annotations
-
+import queue
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .cost import PrecosTokens, estimar_custo_maximo, resumir_custo
+from .cost import PrecosTokens, resumir_custo
 from .models import Consulta, Decisao, ResultadoPesquisa
-from .prompts import (
-    INSTRUCOES_ANALISE,
-    carregar_json,
-)
+from .prompts import carregar_json
 from .rag import PacoteContextoIA, RespostaIA
 from .research_ranking import (
     buscar_candidatos_tribunais,
-    decisao_de_dict,
+    estimar_maximo_pesquisa,
     pacote_analise,
     pacote_planejamento,
     validar_analises,
@@ -21,15 +18,8 @@ from .research_ranking import (
 from .storage import RepositorioSQLite
 from .tribunais_config import TODOS_TJS
 
-# Aliases para compatibilidade retroativa
-_carregar_json = carregar_json
-_validar_plano = validar_plano
-_validar_analises = validar_analises
-_decisao_de_dict = decisao_de_dict
-_pacote_planejamento = pacote_planejamento
-_pacote_analise = pacote_analise
-
 TRIBUNAIS_PADRAO_TODOS: tuple[str, ...] = TODOS_TJS
+_carregar_json = carregar_json
 
 
 class ErroPesquisaAssistida(RuntimeError):
@@ -97,7 +87,7 @@ class PesquisaAssistidaTJSP:
                 f"Planejando consultas jurídicas para o {trib_upper}...",
             )
 
-        pacote_plano = _pacote_planejamento(pergunta, contexto_caso, tribunal=tribunal)
+        pacote_plano = pacote_planejamento(pergunta, contexto_caso, tribunal=tribunal)
         estimativa_maxima = self._estimar_maximo(pacote_plano)
         if estimativa_maxima > max_custo_brl:
             raise LimiteCustoPesquisa(estimativa_maxima, max_custo_brl)
@@ -113,7 +103,7 @@ class PesquisaAssistidaTJSP:
             max_custo_brl=max_custo_brl,
             estimativa_maxima=estimativa_maxima,
         )
-        plano = _validar_plano(_carregar_json(resposta_plano.texto), self.config)
+        plano = validar_plano(carregar_json(resposta_plano.texto), self.config)
         if plano["precisa_esclarecimento"] or not plano["consultas"]:
             if callback_progresso:
                 callback_progresso(
@@ -140,7 +130,9 @@ class PesquisaAssistidaTJSP:
             )
 
         candidatos, consultas_executadas = self._buscar_candidatos(
-            plano["consultas"], tribunal=tribunal
+            plano["consultas"],
+            tribunal=tribunal,
+            callback_progresso=callback_progresso,
         )
         if not candidatos:
             if callback_progresso:
@@ -178,7 +170,7 @@ class PesquisaAssistidaTJSP:
                 "analise", 75, "Analisando relevância dos precedentes..."
             )
 
-        pacote_analise = _pacote_analise(
+        pacote_analise_obj = pacote_analise(
             pergunta, contexto_caso, candidatos, self.config, tribunal=tribunal
         )
         provedor_analise = self.provedor_factory(
@@ -186,17 +178,17 @@ class PesquisaAssistidaTJSP:
             self.config.tokens_analise,
         )
         resposta_analise, auditoria_analise = self._responder_auditado(
-            pacote_analise,
+            pacote_analise_obj,
             provedor_analise,
             etapa="analise_candidatos",
             max_custo_brl=max_custo_brl,
             estimativa_maxima=estimativa_maxima,
         )
-        dados_analise = _carregar_json(
+        dados_analise = carregar_json(
             resposta_analise.texto,
             permitir_resultados_parciais=True,
         )
-        analises = _validar_analises(
+        analises = validar_analises(
             dados_analise,
             candidatos,
             self.config,
@@ -212,6 +204,19 @@ class PesquisaAssistidaTJSP:
             }
             for item in analises
         ]
+
+        if analises and hasattr(self.servico_coleta, "repositorio_ementas"):
+            selec = [
+                por_acordao[i["cd_acordao"]]
+                for i in analises
+                if i["cd_acordao"] in por_acordao
+            ]
+            if selec:
+                threading.Thread(
+                    target=self.servico_coleta.repositorio_ementas.indexar_decisoes,
+                    args=(selec,),
+                    daemon=True,
+                ).start()
 
         if callback_progresso:
             callback_progresso("conclusao", 100, "Pesquisa concluída.")
@@ -244,53 +249,66 @@ class PesquisaAssistidaTJSP:
         tribunal: str = "tjsp",
     ):
         trib_upper = tribunal.upper()
-        yield {
-            "tipo": "progresso",
-            "etapa": "planejamento",
-            "progresso": 15,
-            "mensagem": f"Planejando consultas jurídicas com IA ({trib_upper})...",
-        }
-        resultado = self.pesquisar(
-            pergunta,
-            contexto_caso=contexto_caso,
-            modelo=modelo,
-            max_custo_brl=max_custo_brl,
-            tribunal=tribunal,
+        fila: queue.Queue = queue.Queue()
+
+        def progresso(etapa: str, perc: int, msg: str):
+            fila.put(
+                {
+                    "tipo": "progresso",
+                    "etapa": etapa,
+                    "progresso": perc,
+                    "mensagem": msg,
+                }
+            )
+
+        progresso(
+            "planejamento",
+            15,
+            f"Planejando consultas jurídicas com IA ({trib_upper})...",
         )
-        yield {
-            "tipo": "progresso",
-            "etapa": "conclusao",
-            "progresso": 100,
-            "mensagem": f"Pesquisa concluída ({trib_upper}).",
-        }
-        yield {"tipo": "resultado", "dados": resultado}
+        res_box: list[dict] = []
+        err_box: list[Exception] = []
+
+        def worker():
+            try:
+                res_box.append(
+                    self.pesquisar(
+                        pergunta,
+                        contexto_caso=contexto_caso,
+                        modelo=modelo,
+                        max_custo_brl=max_custo_brl,
+                        tribunal=tribunal,
+                        callback_progresso=progresso,
+                    )
+                )
+            except Exception as exc:
+                err_box.append(exc)
+            finally:
+                fila.put(None)
+
+        threading.Thread(target=worker, daemon=True).start()
+        while (item := fila.get()) is not None:
+            yield item
+        if err_box:
+            raise err_box[0]
+        if res_box:
+            yield {"tipo": "resultado", "dados": res_box[0]}
 
     def _estimar_maximo(self, pacote_plano: PacoteContextoIA) -> float:
-        pacote_maximo = PacoteContextoIA(
-            pergunta="estimativa",
-            instrucoes_sistema=INSTRUCOES_ANALISE,
-            mensagem_usuario="x"
-            * (self.config.max_candidatos * self.config.caracteres_ementa),
-            fontes=(),
-        )
-        return estimar_custo_maximo(
-            [pacote_plano],
-            max_output_tokens=self.config.tokens_planejamento,
-            precos=self.precos,
-        ) + estimar_custo_maximo(
-            [pacote_maximo],
-            max_output_tokens=self.config.tokens_analise,
-            precos=self.precos,
-        )
+        return estimar_maximo_pesquisa(pacote_plano, self.config, self.precos)
 
     def _buscar_candidatos(
-        self, consultas: list[dict], tribunal: str = "todos"
+        self,
+        consultas: list[dict],
+        tribunal: str = "todos",
+        callback_progresso: Callable | None = None,
     ) -> tuple[list[Decisao], list[dict]]:
         candidatos, executadas, mapa = buscar_candidatos_tribunais(
             self.servico_coleta,
             consultas,
             tribunal=tribunal,
             max_candidatos=self.config.max_candidatos,
+            callback_progresso=callback_progresso,
         )
         self._tribunal_por_acordao = mapa
         return candidatos, executadas

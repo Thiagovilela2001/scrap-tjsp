@@ -50,4 +50,3 @@ class TokenBucket:
     def registrar(self) -> None:
         with self._lock:
             self.ultimo = time.monotonic()
-

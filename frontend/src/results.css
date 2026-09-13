@@ -1,0 +1,224 @@
+/* Professional research results: dense records, quiet hierarchy, document-led reading. */
+.results-split-layout {
+  gap: 24px;
+}
+
+.precedents-list {
+  border-top: 1px solid var(--border-color);
+}
+
+.precedent-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  margin: 0;
+  padding: 20px 16px 20px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.precedent-card:hover {
+  border-color: var(--border-color);
+  background: color-mix(in srgb, var(--bg-subtle) 62%, transparent);
+}
+
+.precedent-card:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.precedent-card.selected,
+.precedent-card.active-inspected {
+  border-color: var(--border-color);
+  background: color-mix(in srgb, var(--accent-soft) 28%, transparent);
+  box-shadow: inset 3px 0 0 var(--brand-accent);
+}
+
+.precedent-index {
+  gap: 6px;
+  padding-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.precedent-index-line {
+  height: 28px;
+  background: var(--border-color);
+}
+
+.precedent-content {
+  padding-right: 0;
+}
+
+.card-top-row {
+  gap: 16px;
+}
+
+.card-identity {
+  gap: 10px;
+}
+
+.process-id-wrap {
+  gap: 7px;
+}
+
+.court-prefix-tag,
+.court-pill-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--brand-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.process-number-text {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.action-icon-btn,
+.inspector-copy-btn {
+  color: var(--text-muted);
+}
+
+.action-icon-btn:hover,
+.inspector-copy-btn:hover {
+  color: var(--brand-accent);
+}
+
+.relevance-score {
+  display: block;
+  min-width: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  text-align: left;
+}
+
+.relevance-labels {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+}
+
+.relevance-label,
+.relevance-number {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.relevance-number {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metadata-chips-row {
+  display: flex;
+  gap: 5px 20px;
+  margin: 12px 0 0 30px;
+}
+
+.meta-chip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.meta-chip dt {
+  color: var(--text-muted);
+}
+
+.meta-chip dt::after {
+  content: ':';
+}
+
+.meta-chip dd {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.case-fit-panel {
+  margin: 14px 0 0 30px;
+  padding: 11px 14px;
+  border: 0;
+  border-left: 2px solid var(--brand-accent);
+  border-radius: 0 4px 4px 0;
+  background: var(--bg-subtle);
+}
+
+.case-fit-header,
+.fit-kicker {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.case-fit-body {
+  margin-top: 5px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.case-fit-caveat {
+  margin-top: 10px;
+  padding-top: 9px;
+  font-size: 12px;
+}
+
+.ementa-section {
+  margin: 12px 0 0 30px;
+}
+
+.ementa-toggle-btn {
+  min-height: 32px;
+  padding: 7px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ementa-content-box {
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+}
+
+.ementa-text {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.card-action-footer {
+  gap: 6px;
+  margin: 12px 0 0 30px;
+}
+
+.card-action-footer [data-slot='button'] {
+  min-height: 30px;
+  padding: 5px 9px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.btn-tribunal-ext {
+  font-size: 12px;
+}

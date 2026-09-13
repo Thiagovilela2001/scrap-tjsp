@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import React, { useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Minus } from 'lucide-react';
-import { COURT_GROUPS } from '../data/courts';
+import { COURT_GROUPS, COURT_PRESETS } from '../data/courts';
 
 export default function CourtSelector({ activeCodes, selectedCodes, onChange, disabled, compact = false }) {
   const [activeGroup, setActiveGroup] = useState('estaduais');
@@ -49,6 +49,30 @@ export default function CourtSelector({ activeCodes, selectedCodes, onChange, di
             {collapsed ? <ChevronDown size={17} aria-hidden="true" /> : <ChevronUp size={17} aria-hidden="true" />}
           </Button>
         )}
+      </div>
+
+      <div className="court-presets-row" role="group" aria-label="Atalhos de escopo de pesquisa">
+        {COURT_PRESETS.map((preset) => {
+          const validCodes = preset.codes.filter((code) =>
+            activeCodes.size === 0 || activeCodes.has(code)
+          );
+          const isPresetActive =
+            validCodes.length > 0 &&
+            validCodes.length === selectedCodes.size &&
+            validCodes.every((code) => selectedCodes.has(code));
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              className={`court-preset-btn ${isPresetActive ? 'active' : ''}`}
+              aria-pressed={isPresetActive}
+              onClick={() => onChange(new Set(validCodes))}
+              disabled={disabled}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
       </div>
 
       <Tabs value={activeGroup} onValueChange={setActiveGroup}>

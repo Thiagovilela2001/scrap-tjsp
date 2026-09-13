@@ -217,4 +217,3 @@ TODOS_TJS: tuple[str, ...] = (
     "tjsp",
     "tjto",
 )
-

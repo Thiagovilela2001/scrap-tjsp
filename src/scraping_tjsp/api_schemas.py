@@ -175,4 +175,3 @@ def validar_limites(
                 f"max_custo_brl excede o limite do servidor ({config.max_custo_brl})."
             ),
         )
-

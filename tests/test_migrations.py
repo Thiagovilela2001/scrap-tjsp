@@ -26,4 +26,3 @@ def test_repositorio_inicializar_aplica_migracoes(tmp_path: Path):
     aplicadas_novas = repo.inicializar()
     assert aplicadas_novas == []
     repo.fechar()
-

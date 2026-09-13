@@ -14,10 +14,17 @@ export default function Sidebar({ isOpen, onClose, history, onSelectHistory, onC
   return (
     <aside id="research-sidebar" tabIndex={-1} className={`studio-sidebar ${isOpen ? 'open' : ''}`} aria-label="Arquivo de pesquisa">
       <div className="sidebar-header">
-        <div><span className="sidebar-eyebrow">{isMobile ? 'Suas consultas' : 'Workspace'}</span><h2 id={isMobile ? 'mobile-view-title' : undefined} tabIndex={isMobile ? -1 : undefined} className="sidebar-title">Arquivo de pesquisa</h2></div>
+        <div>{isMobile && <span className="sidebar-eyebrow">Suas consultas</span>}<h2 id={isMobile ? 'mobile-view-title' : undefined} tabIndex={isMobile ? -1 : undefined} className="sidebar-title">Arquivo de pesquisa</h2></div>
         <Button variant="ghost" size="icon" type="button" className="sidebar-close-btn" onClick={onClose} aria-label="Fechar arquivo"><X size={17} aria-hidden="true" /></Button>
       </div>
       <div className="sidebar-scrollable">
+        {!isMobile && <CourtSelector
+          activeCodes={activeCourtCodes}
+          selectedCodes={selectedCourtCodes}
+          onChange={onCourtSelectionChange}
+          disabled={loading}
+          compact
+        />}
         {processos.length > 0 && (
           <section className="sidebar-section sidebar-analysis" aria-labelledby="analysis-title">
             <div className="sidebar-section-header"><h3 id="analysis-title">Leitura do conjunto</h3><FileStack size={14} aria-hidden="true" /></div>
@@ -56,13 +63,6 @@ export default function Sidebar({ isOpen, onClose, history, onSelectHistory, onC
             </ol>
           ) : <p className="sidebar-empty-state">Consultas recentes aparecerão aqui.</p>}
         </section>
-        {!isMobile && <CourtSelector
-          activeCodes={activeCourtCodes}
-          selectedCodes={selectedCourtCodes}
-          onChange={onCourtSelectionChange}
-          disabled={loading}
-          compact
-        />}
         <footer className="sidebar-footer-info"><span>Fontes oficiais</span><small>Acórdãos e metadados dos Tribunais de Justiça.</small></footer>
       </div>
     </aside>

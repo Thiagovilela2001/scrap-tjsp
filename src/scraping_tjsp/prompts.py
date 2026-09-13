@@ -203,4 +203,3 @@ def carregar_resultados_parciais(texto: str) -> dict | None:
     if not resultados:
         return None
     return {"resultados": resultados, "_resposta_parcial": True}
-

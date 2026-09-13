@@ -14,9 +14,7 @@ def executar_migracoes(conexao: sqlite3.Connection) -> list[str]:
         );
         """
     )
-    aplicadas_rows = conexao.execute(
-        "SELECT id FROM migracoes_schema"
-    ).fetchall()
+    aplicadas_rows = conexao.execute("SELECT id FROM migracoes_schema").fetchall()
     aplicadas = {str(row[0]) for row in aplicadas_rows}
 
     novas_aplicadas: list[str] = []
@@ -52,4 +50,3 @@ def executar_migracoes(conexao: sqlite3.Connection) -> list[str]:
         novas_aplicadas.append(migracao_002)
 
     return novas_aplicadas
-
